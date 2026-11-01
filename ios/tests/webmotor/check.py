@@ -11,6 +11,7 @@ start=nav.index('    static func distM('); end=nav.index('\n    }',start)+6
 core+='enum NaviBridge {\n'+nav[start:end]+'\n}\n'
 core+=(root/'MotoNav/RouteGeometry.swift').read_text()+'\n'
 core+=(root/'MotoNav/MotorRouteTracker.swift').read_text()+'\n'
+core+=(root/'MotoNav/MotorReroutePolicy.swift').read_text()+'\n'
 bicycle=(root/'MotoNav/BicycleRoutes.swift').read_text()
 core+=bicycle[bicycle.index('enum BicycleRouteParser'):bicycle.index('/// Public iOS SDK bicycle planning')]+'\n'
 core+=(root/'MotoNav/BleHandshakeClock.swift').read_text()+'\n'
