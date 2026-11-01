@@ -68,10 +68,13 @@ object BleLink {
     @Volatile var screenBattery = ""             // v7.6 圆屏电量（固件 v6.8 起，接了电池才有），例 "85%⚡"
     @Volatile var screenBatteryPct = -1
     @Volatile var screenName = ""                // v7.8 连着的圆屏蓝牙名，例 "MotoNav-3A7F"（旧固件都叫 "MotoNav"）
+    @Volatile var isCyd = false
     private var lastAddr: String? = null         // v7.8 上次验证通过的圆屏地址（存在手机上）
     private var skipAddr = ""                    // v7.8 换圆屏时这次搜索跳过的地址
     private var candidate: ScanResult? = null    // v7.8 搜到的“别的圆屏”里信号最强的
     private var scanStartAt = 0L
+    private var scanSeen = 0
+    private var scanMatches = 0
     @Volatile var needUnbond = false             // v6.9 手机记着配对、圆屏却不认了：要到系统蓝牙设置里取消配对
     private var staleCount = 0                   // v6.9 “手机有配对记录、却没通过验证就断开”连续几次
     private var gatt: BluetoothGatt? = null
@@ -163,12 +166,17 @@ object BleLink {
             }
             if (gatt != null || scanning) return
             val scanner = ad.bluetoothLeScanner ?: run { status = "无法扫描"; scheduleRetry(); return }
-            val filters = listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build())
+            // Some Android BLE stacks do not apply a 128-bit service filter to
+            // UUIDs placed in the ESP32 scan response. Scan broadly and keep
+            // the same service/name check in the callback instead.
+            val filters = emptyList<ScanFilter>()
             val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
             scanning = true
-            status = "正在搜索圆屏…"
+            status = "正在搜索导航屏…"
             candidate = null
             scanStartAt = now()
+            scanSeen = 0
+            scanMatches = 0
             scanner.startScan(filters, settings, scanCallback)
             handler.postDelayed(scanTimeout, SCAN_TIMEOUT_MS)
             handler.postDelayed(pickCandidate, PREFER_MS)          // v7.8
@@ -182,7 +190,7 @@ object BleLink {
         if (scanning) {
             stopScan()
             skipAddr = ""                                          // v7.8 附近只有一块：下次也连它
-            status = "没找到圆屏（确认已通电），稍后自动重试"
+            status = "没找到导航屏（扫描到 ${scanSeen} 个设备，匹配 ${scanMatches} 个），稍后自动重试"
             scheduleRetry()
         }
     }
@@ -206,6 +214,9 @@ object BleLink {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (!scanning) return
+            scanSeen++
+            if (!isMotoNavResult(result)) return
+            scanMatches++
             // v7.8 优先连上次那块；别的圆屏先记着，等 4 秒还没见到上次那块再连
             val addr = result.device.address
             if (addr == skipAddr) return
@@ -224,6 +235,14 @@ object BleLink {
         }
     }
 
+    private fun isMotoNavResult(result: ScanResult): Boolean {
+        val record = result.scanRecord
+        val hasService = record?.serviceUuids?.any { it.uuid == SERVICE_UUID } == true
+        val name = record?.deviceName?.takeIf { it.isNotBlank() }
+            ?: (try { result.device.name } catch (_: SecurityException) { null })
+        return hasService || name?.startsWith("MotoNav") == true
+    }
+
     /** v7.8 等够了还没见到上次那块：连信号最强的另一块 */
     private val pickCandidate = Runnable { if (scanning) candidate?.let { connectTo(it) } }
 
@@ -232,8 +251,13 @@ object BleLink {
         candidate = null
         screenName = r.scanRecord?.deviceName?.takeIf { it.isNotBlank() }
             ?: (try { r.device.name } catch (_: SecurityException) { null }) ?: "MotoNav"
+        isCyd = screenName.startsWith("MotoNav-CYD")
         status = "找到 $screenName，正在连接…"
         gatt = r.device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        if (gatt == null) {
+            status = "连接句柄创建失败，稍后自动重试"
+            scheduleRetry()
+        }
     }
 
     private fun prefs() = appContext?.getSharedPreferences("ble", Context.MODE_PRIVATE)
@@ -262,7 +286,7 @@ object BleLink {
         gatt = null
         rxChar = null
         mtu = 23
-        screenName = ""; screenBattery = ""; screenBatteryPct = -1
+        screenName = ""; isCyd = false; screenBattery = ""; screenBatteryPct = -1
         pairHint = ""; staleCount = 0; needUnbond = false
         connect(c)
     }
@@ -358,7 +382,10 @@ object BleLink {
                 screenBattery = ""; screenBatteryPct = -1
                 status = "已连接，正在读取服务…"
                 g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
-                g.discoverServices()
+                if (!g.discoverServices()) {
+                    status = "服务读取启动失败，稍后自动重试"
+                    try { g.disconnect() } catch (_: Exception) {}
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 checkStaleBond(g)                        // v6.9 先看看是不是“手机记着、圆屏忘了”
                 ready = false
@@ -376,6 +403,11 @@ object BleLink {
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, st: Int) {
+            if (st != BluetoothGatt.GATT_SUCCESS) {
+                status = "服务读取失败（$st），稍后自动重试"
+                try { g.disconnect() } catch (_: Exception) {}
+                return
+            }
             rxChar = g.getService(SERVICE_UUID)?.getCharacteristic(RX_UUID)
             if (rxChar == null) {
                 status = "连上了但找不到服务，检查 UUID"
@@ -532,6 +564,7 @@ object BleLink {
             if (payload < 100) return                  // 没协商到大数据包就不发
             val parts = (data.size + payload - 1) / payload
             if (parts > 4000) return
+            val packets = ArrayList<BulkPkt>(parts)
             for (p in 0 until parts) {
                 val off = p * payload
                 val len = minOf(payload, data.size - off)
@@ -541,8 +574,9 @@ object BleLink {
                     data.size.toByte(), (data.size shr 8).toByte(), (data.size shr 16).toByte(), (data.size shr 24).toByte(),
                     off.toByte(), (off shr 8).toByte(), (off shr 16).toByte(), (off shr 24).toByte()
                 )
-                bulkQ.addLast(BulkPkt(type, h + data.copyOfRange(off, off + len)))
+                packets.add(BulkPkt(type, h + data.copyOfRange(off, off + len)))
             }
+            if (type == 2) bulkQ.addAll(0, packets) else bulkQ.addAll(packets)
             bulkSentKB += data.size / 1024
         }
         pump()
@@ -706,11 +740,11 @@ object BleLink {
             val prev = i.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
             when (i.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)) {
                 BluetoothDevice.BOND_BONDING ->
-                    pairHint = "正在配对：在手机弹出的配对框里输入圆屏上显示的 6 位数字（没弹出就下拉通知栏看看）"
+                    pairHint = "正在配对：在手机弹出的配对框里输入导航屏上显示的 6 位数字（没弹出就下拉通知栏看看）"
                 BluetoothDevice.BOND_BONDED ->
                     pairHint = "配对成功，正在验证…"
                 BluetoothDevice.BOND_NONE -> if (prev == BluetoothDevice.BOND_BONDING)
-                    pairHint = "配对没成功。圆屏显示 LOCKED 的话：重启圆屏，2 分钟内再连"
+                    pairHint = "配对没成功。导航屏显示 LOCKED 的话：重启导航屏，2 分钟内再连"
             }
         }
     }
@@ -747,11 +781,11 @@ object BleLink {
         if (removed) {
             needUnbond = false
             staleCount = 0
-            pairHint = "圆屏不认识这台手机的旧配对了，已自动清掉，正在重连：手机弹出配对框时输入圆屏上的 6 位数字"
+            pairHint = "导航屏不认识这台手机的旧配对了，已自动清掉，正在重连：手机弹出配对框时输入导航屏上的 6 位数字"
         } else {
             needUnbond = true
-            pairHint = "圆屏不认识这台手机的旧配对了：点这里打开系统蓝牙设置，在已配对设备里对 ${screenName.ifEmpty { "MotoNav" }} 点「取消配对 / 忽略」，" +
-                "再回来会自动重连，输入圆屏上的配对码"
+            pairHint = "导航屏不认识这台手机的旧配对了：点这里打开系统蓝牙设置，在已配对设备里对 ${screenName.ifEmpty { "MotoNav" }} 点「取消配对 / 忽略」，" +
+                "再回来会自动重连，输入导航屏上的配对码"
         }
     }
 

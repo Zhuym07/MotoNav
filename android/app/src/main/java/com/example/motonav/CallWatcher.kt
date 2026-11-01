@@ -60,7 +60,7 @@ object CallWatcher {
             !granted(c, Manifest.permission.READ_PHONE_STATE) -> "没有电话权限，来电显示不能用"
             !granted(c, Manifest.permission.READ_CALL_LOG) -> "没有通话记录权限：只显示“来电”，看不到号码"
             !granted(c, Manifest.permission.READ_CONTACTS) -> "没有通讯录权限：只显示号码，不显示名字"
-            !granted(c, Manifest.permission.ANSWER_PHONE_CALLS) -> "没有接听电话权限：圆屏上按住接不了电话（把来电显示关掉再打开就会弹授权）"
+            !granted(c, Manifest.permission.ANSWER_PHONE_CALLS) -> "没有接听电话权限：无法从导航屏接听（把来电显示关掉再打开就会弹授权）"
             else -> "权限齐全"
         }
     }
@@ -121,28 +121,43 @@ object CallWatcher {
         BleLink.sendImage(2, 0, 0, ByteArray(0))
     }
 
-    /** v5.3 圆屏发来的触摸事件："T,A" 按住够久了要接听；"T,P,x,y" 按下的位置；v5.4 "T,W" 要天气 */
+    /** Screen touch actions include calls, weather requests, and CYD map settings. */
     fun onScreenTouch(p: List<String>) {
         when (p.getOrNull(1)) {
             "P" -> lastTouch = "x=${p.getOrNull(2)} y=${p.getOrNull(3)}"
             "A" -> main.post { answer() }
             "W" -> Weather.request()                                  // v5.4 圆屏滑到了天气页
+            "S" -> applyScreenSetting(p.getOrNull(2)?.toIntOrNull(), p.getOrNull(3)?.toIntOrNull())
+        }
+    }
+
+    private fun applyScreenSetting(setting: Int?, value: Int?) {
+        if (setting == null || value == null) return
+        main.post {
+            when (setting) {
+                1 -> MapFeeder.setTheme(value)
+                2 -> MapFeeder.setNightMode(value)
+                3 -> MapFeeder.setTrail(value)
+                4 -> MapFeeder.setCurve(value != 0)
+                5 -> MapFeeder.setClean(value != 0)
+                6 -> MapFeeder.setProgress(value != 0)
+            }
         }
     }
 
     private fun answer() {
         val c = ctx ?: return
-        if (!ringing) { lastInfo = "圆屏要求接听，但现在没有来电"; return }
+        if (!ringing) { lastInfo = "导航屏要求接听，但现在没有来电"; return }
         if (!granted(c, Manifest.permission.ANSWER_PHONE_CALLS)) {
-            lastInfo = "圆屏要求接听，但没有“接听电话”权限（把来电显示关掉再打开授权）"; return
+            lastInfo = "导航屏要求接听，但没有“接听电话”权限（把来电显示关掉再打开授权）"; return
         }
         lastInfo = try {
             val tm = c.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
             @Suppress("DEPRECATION")
             tm.acceptRingingCall()
-            "已从圆屏接听"
+            "已从导航屏接听"
         } catch (e: Exception) {
-            "圆屏接听失败：${e.message}"
+            "导航屏接听失败：${e.message}"
         }
     }
 

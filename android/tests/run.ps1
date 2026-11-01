@@ -8,6 +8,8 @@ New-Item -ItemType Directory -Force $taskClasses | Out-Null
 $taskCases=@(
     @{Sources=@('CruiseIdleTimer'); Test='CruiseIdleTimerTest'},
     @{Sources=@('MapStylePolicy'); Test='MapStylePolicyTest'},
+    @{Sources=@('AmapBuildings','RasterPacket','CydRasterPacket'); Test='CydRasterPacketTest'},
+    @{Sources=@(); Test='CydTouchMappingTest'},
     @{Sources=@('WeatherArea'); Test='WeatherAreaTest'},
     @{Sources=@('ArrivalPolicy'); Test='ArrivalPolicyTest'},
     @{Sources=@('RideTrackMath','MapLoadStatus'); Test='RideToolsTest'}

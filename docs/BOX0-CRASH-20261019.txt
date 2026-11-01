@@ -1,0 +1,16 @@
+2026-10-19 BOX0 navigation crash reproduction
+Old firmware: v7.8.12-BOX0-SQUARE
+Matching ELF SHA256: 2fb6416e629f317bfab6e151b24dad3c250a712fdb185116709654b51f685562
+Log: serial-old-live-nav.txt (five Cache error panics)
+Fault: Dbus write to cache rejected, address 0x3c0c6010
+A2 = 0xffffffa5 (-91), A3 = 0x14d (333)
+Decoded with xtensa-esp32s3-elf-addr2line -pfiaC and v7.8.12-crash.elf:
+0x4200348f vignetteRows(int,int,int) MotoNav.ino:7983
+0x42076435 parallelRows(...) MotoNav.ino:3108
+0x4201034e drawVignette(float,float,int) MotoNav.ino:8006
+0x420138aa drawMapFrame() MotoNav.ino:8237
+0x42013ce5 drawNavFrame() MotoNav.ino:8316
+0x420149ba loop() MotoNav.ino:8937
+Root cause: circular vignette passed negative and >239 row indices directly to framebuffer writes after reducing canvas from466 to240. No power/brownout indication in these captured panics.
+Fix: square edge vignette iterates only LCD_WIDTH/LCD_HEIGHT; row callback interface clamps all row ranges. Map caps, dimming and icon blits are also clipped, UI is laid out at native240x240.
+Hardware regression validation: pending.

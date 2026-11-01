@@ -52,8 +52,11 @@ class AmapCaptureHost private constructor(private val context: Context,private v
         map.showBuildings(false); map.showIndoorMap(false); map.showMapText(false)
         map.setOnMapLoadedListener { if (alive) { loaded=true; AmapSdkRaster.state="高德无字底图已就绪" } }
         val close=TextView(context).apply {
-            text="×"; textSize=24f; gravity=Gravity.CENTER
-            setTextColor(0xffffffff.toInt()); setBackgroundColor(0x99000000.toInt())
+            text="×"; textSize=22f; gravity=Gravity.CENTER
+            setTextColor(NavStyle.TEXT)
+            background=NavStyle.round(context, NavStyle.CARD_SOLID, 8f, NavStyle.STROKE)
+            elevation=dp(2).toFloat()
+            contentDescription="关闭预览"
             setOnClickListener { setPreview(false) }
         }
         box.addView(close,FrameLayout.LayoutParams(dp(32),dp(32),Gravity.TOP or Gravity.END))
@@ -168,7 +171,7 @@ class AmapCaptureHost private constructor(private val context: Context,private v
         pending=null; serial++; box.keepScreenOn=false
         withoutBuildings=null
         map.setOnCameraChangeListener(null)
-        AmapSdkRaster.state=reason ?: "高德完整底图已取到，正在准备圆屏数据"
+        AmapSdkRaster.state=reason ?: "高德完整底图已取到，正在准备导航屏数据"
         done(shot,reason)
     }
     override fun cancelCapture() { finish(null,"高德取图已暂停，保留当前地图") }

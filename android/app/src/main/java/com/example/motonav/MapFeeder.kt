@@ -149,7 +149,7 @@ object MapFeeder {
     private var routeProgress = -1.0
     fun offlineStatus(): String {
         val status=offlineMaps?.status ?: ""
-        return if (source==SRC_AMAP) (if (status.isEmpty()) "高德楼块实验" else status)+"\n"+(if(!buildingEnabled) "俯视楼块已关闭" else if(BleLink.buildingsSupported) "圆屏支持俯视楼块" else "旧固件按普通地图显示；楼块需实验固件")+"\n"+AmapSdkRaster.state else status
+        return if (source==SRC_AMAP) (if (status.isEmpty()) "高德楼块实验" else status)+"\n"+(if(!buildingEnabled) "俯视楼块已关闭" else if(BleLink.buildingsSupported) "导航屏支持俯视楼块" else "旧固件按普通地图显示；楼块需实验固件")+"\n"+AmapSdkRaster.state else status
     }
 
     /** 规划页选定路线后就开始下载，不必等车辆出发。 */
@@ -192,11 +192,11 @@ object MapFeeder {
 
     fun screenMapStatus(): String {
         val maps=offlineMaps ?: return ""
-        if (!BleLink.isConnected) return "圆屏未连接"
+        if (!BleLink.isConnected) return "导航屏未连接"
         val first=maps.plan.nodes.first()
         return if (haveConfirmedChunk && confirmedSat==false &&
             maxOf(kotlin.math.abs(first.x-confirmedCx),kotlin.math.abs(first.y-confirmedCy))<500)
-            "圆屏起点底图已就绪" else "圆屏起点底图准备中"
+            "导航屏起点底图已就绪" else "导航屏起点底图准备中"
     }
 
     private fun clearOfflineRoute() { offlineMaps?.close(); offlineMaps=null; offlineKey=""; routeProgress=-1.0 }
@@ -321,6 +321,7 @@ object MapFeeder {
     fun setNightMode(m: Int) {
         nightMode = m
         ctx?.getSharedPreferences(PREFS, Context.MODE_PRIVATE)?.edit()?.putInt("map_night", m)?.apply()
+        BleLink.send("#N,$nightMode")
         applyNight()
     }
 
@@ -542,7 +543,7 @@ object MapFeeder {
                             chunkBuildingsComplete=carried?.complete ?: RasterPacket.isBuilding(base)
                             chunkId = (chunkId + 1) and 0xFF; chunkAcked = false
                             chunkInfo = "地图块 #$chunkId：${if (src==SRC_AMAP) "高德无字" else "天地图"}${if(chunkBuildingsComplete) "楼块底图" else "普通底图"}，${base.size / 1024} KB，覆盖 2.4 公里，2 米/像素" + (if (cached!=null) "（离线包）" else "") + (if((carried?.retained ?: 0)>0) "（保留重叠楼块）" else "")
-                            status = "普通底图已生成，正在传到圆屏"
+                            status = "普通底图已生成，正在传到导航屏"
                             sendChunk()
                         }
                     }
@@ -560,7 +561,8 @@ object MapFeeder {
                 try {
                     val json = OsmFetch.query(sw[0], sw[1], ne[0], ne[1])
                     val feats = OsmFetch.parse(json, f)
-                    bytes = MapGeo.encodeChunk(f.id, fallbackCx, fallbackCy, HALF, feats, MAX_BYTES, MAX_FEAT)
+                    bytes = MapGeo.encodeChunk(f.id, fallbackCx, fallbackCy, HALF, feats,
+                        if (BleLink.isCyd) 80_000 else MAX_BYTES, MAX_FEAT)
                     type = TYPE_CHUNK
                     info = "OpenStreetMap ${feats.size} 个要素，${bytes.size / 1024} KB"
                 } catch (e: Exception) {
@@ -571,7 +573,7 @@ object MapFeeder {
                 if (serial != requestSerial || src != source || sat != satMode() || routeOnly()) return@post
                 fetching = false
                 if (baseInstalledSerial==serial) {
-                    if (chunkAcked) status="圆屏已收到普通底图"
+                    if (chunkAcked) status="导航屏已收到普通底图"
                     return@post
                 }
                 val b = bytes
@@ -597,7 +599,7 @@ object MapFeeder {
                 sendChunk()
             }
           } catch (_: OutOfMemoryError) {
-            handler.post { if (serial == requestSerial && !routeOnly()) { fetching=false; lastFetchFail=now(); status="手机内存不足，保留圆屏当前底图，稍后重试" } }
+            handler.post { if (serial == requestSerial && !routeOnly()) { fetching=false; lastFetchFail=now(); status="手机内存不足，保留导航屏当前底图，稍后重试" } }
           }
         }
     }
@@ -607,7 +609,12 @@ object MapFeeder {
         if (!enabled || routeOnly()) return
         chunkSentAt = now()
         if (chunkDeliveryId != chunkId) { chunkDeliveryId = chunkId; chunkDeliveryStart = chunkSentAt }
-        BleLink.sendBulk(chunkType, chunkId, if(chunkType==TYPE_RASTER && !buildingMode()) RasterPacket.forLegacy(b) else b)
+        val packet = when {
+            chunkType == TYPE_RASTER && BleLink.isCyd -> CydRasterPacket.downsample(b)
+            chunkType == TYPE_RASTER && !buildingMode() -> RasterPacket.forLegacy(b)
+            else -> b
+        } ?: return
+        BleLink.sendBulk(chunkType, chunkId, packet)
     }
 
     // ================= 路线 =================
@@ -625,7 +632,7 @@ object MapFeeder {
             // v3.3 红绿灯位置（高德坐标 → 平面坐标）一起打包
             val lp = DoubleArray(lights.size * 2)
             for (i in lights.indices) { lp[2 * i] = f.x(lights[i][1]); lp[2 * i + 1] = f.y(lights[i][0]) }
-            val b = MapGeo.encodeRoute(f.id, pts, 20000, lp)
+            val b = MapGeo.encodeRoute(f.id, pts, if (BleLink.isCyd) 5000 else 20000, lp)
             handler.post {
                 routeId = (routeId + 1) and 0xFF
                 routeBytes = b
@@ -685,7 +692,7 @@ object MapFeeder {
                 chunkAcked = true
                 haveConfirmedChunk = true; confirmedCx = chunkCx; confirmedCy = chunkCy; confirmedSat = chunkSat
                 confirmedHalf = chunkHalf
-                status = "圆屏已收到普通底图"
+                status = "导航屏已收到普通底图"
                 // 规划页停车等待时也能接着准备起点底图，不依赖下一次行驶定位。
                 val maps=offlineMaps
                 if (maps!=null && enabled && !fetching) {
@@ -712,6 +719,7 @@ object MapFeeder {
             BleLink.send("#r,$trail")                    // v2.8 走过的路线
             BleLink.send(if (clean) "#w,1" else "#w,0")   // v4.8 清爽模式
             BleLink.send(if (curve) "#Q,1" else "#Q,0")   // v5.9 弯道急缓上色（v6.1 改用 #Q）
+            BleLink.send("#N,$nightMode")               // CYD settings page shows the selected auto/day/night mode
             BleLink.send("#R,$screenRot")                // v6.1 圆屏方向
             BleLink.send("#D$screenDeg")                 // v6.3 任意角度（固件 v6.4）
             BleLink.send("#L$leadMs")                    // v7.2 预判提前量（固件 v6.7）
@@ -741,11 +749,11 @@ object MapFeeder {
         lastFetchFail>0 && (status.contains("失败") || status.contains("内存不足")),haveConfirmedChunk && chunkAcked)
 
     fun infoText(): String =
-        if (!enabled) "已关闭" else if (routeOnly()) "龙珠雷达：绿色网格，无底图下载与传输\n$routeInfo${if (routeAcked) "（圆屏已确认）" else ""}" else "来源：${sourceName()}　$status\n$chunkInfo${if (chunkAcked) "（圆屏已确认）" else ""}\n" +
-            "$routeInfo${if (routeAcked) "（圆屏已确认）" else ""}\n" + offlineStatus() + "\n" + coverageInfo()
+        if (!enabled) "已关闭" else if (routeOnly()) "龙珠雷达：绿色网格，无底图下载与传输\n$routeInfo${if (routeAcked) "（导航屏已确认）" else ""}" else "来源：${sourceName()}　$status\n$chunkInfo${if (chunkAcked) "（导航屏已确认）" else ""}\n" +
+            "$routeInfo${if (routeAcked) "（导航屏已确认）" else ""}\n" + offlineStatus() + "\n" + coverageInfo()
 
     private fun coverageInfo(): String {
-        if (!haveConfirmedChunk || !havePose) return "地图覆盖：等待圆屏确认"
+        if (!haveConfirmedChunk || !havePose) return "地图覆盖：等待导航屏确认"
         val distance = maxOf(kotlin.math.abs(poseX - confirmedCx), kotlin.math.abs(poseY - confirmedCy))
         val margin = (confirmedHalf - MapCoveragePolicy.viewRadius(150) - distance).roundToInt()
         return "已确认覆盖 ${(confirmedHalf * 2).roundToInt()} 米，可见余量 $margin 米\n" +

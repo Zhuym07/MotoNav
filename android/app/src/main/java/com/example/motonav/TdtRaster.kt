@@ -166,14 +166,14 @@ object TdtRaster {
         val cleaned = MapGeo.cleanRaster(idx, n, n)
         val idx2 = MapGeo.dilateRoads(cleaned, n, n)   // v2.3.2 先清理杂点再加粗道路
         val base = MapGeo.encodeRaster(f.id, x0, y0, n, n, (mpp * 1000).roundToInt(), idx2)
-        if (base.size > 480_000) throw Exception("普通底图超过圆屏缓冲")
+        if (base.size > 480_000) throw Exception("普通底图超过导航屏缓冲")
         // 先交付完整普通地图，轮廓计算和传送不再挡住底图覆盖。
         checkCancelled()
         onBaseReady?.invoke(base)
         if (!makePreview && !vice) return Result(base,tw*th,cacheHit[0],null,null)
         val bytes = if (vice && !deferSmooth) try { ViceRaster.append(base, cleaned, n, n, idx2) }
             catch (_: OutOfMemoryError) { base } else base
-        if (bytes.size > 480_000) throw Exception("压缩后 ${bytes.size / 1024} KB，超过圆屏缓冲")
+        if (bytes.size > 480_000) throw Exception("压缩后 ${bytes.size / 1024} KB，超过导航屏缓冲")
         // 预览图（给 App 界面看，方便调颜色归类）
         val pv = 300
         val pr = IntArray(pv * pv); val pc = IntArray(pv * pv)
@@ -282,7 +282,7 @@ object TdtRaster {
             ((r shr 3) shl 11) or ((g shr 2) shl 5) or (b shr 3)
         }
         val bytes = MapGeo.encodeRaster(f.id, x0, y0, n, n, (SAT_MPP * 1000).roundToInt(), idx, pal)
-        if (bytes.size > 480_000) throw Exception("卫星图压缩后 ${bytes.size / 1024} KB，超过圆屏缓冲")
+        if (bytes.size > 480_000) throw Exception("卫星图压缩后 ${bytes.size / 1024} KB，超过导航屏缓冲")
         // 预览
         val pv = 300
         val pr = IntArray(pv * pv); val pc = IntArray(pv * pv)

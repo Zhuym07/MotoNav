@@ -44,8 +44,10 @@ import com.amap.api.maps.model.MyLocationStyle
 import com.amap.api.maps.model.Polyline
 import com.amap.api.maps.model.PolylineOptions
 import com.amap.api.navi.AMapNavi
+import com.amap.api.navi.enums.TravelStrategy
 import com.amap.api.navi.model.AMapNaviPath
 import com.amap.api.navi.model.NaviLatLng
+import com.amap.api.navi.model.NaviPoi
 import com.amap.api.navi.view.RouteOverLay
 import com.amap.api.services.core.LatLonPoint
 import com.amap.api.services.help.Inputtips
@@ -117,6 +119,8 @@ class RoutePlanActivity : AppCompatActivity() {
     // 设置
     private var avoidHighway = true
     private var emulate = false
+    private var ride = false
+    private val isTravel: Boolean get() = shareRoute?.isTravel ?: ride
 
     // 界面
     private lateinit var root: FrameLayout
@@ -135,6 +139,9 @@ class RoutePlanActivity : AppCompatActivity() {
     private lateinit var amapShareBtn: TextView
     private lateinit var hwChip: TextView
     private lateinit var emuChip: TextView
+    private lateinit var modeRow: LinearLayout
+    private lateinit var driveChip: TextView
+    private lateinit var rideChip: TextView
     private lateinit var locBtn: TextView
     private var insetTop = 0
     private var insetBottom = 0
@@ -149,6 +156,7 @@ class RoutePlanActivity : AppCompatActivity() {
         NaviBridge.initPrivacy(this)
         MapFeeder.load(this)
         avoidHighway = getSharedPreferences("motonav", Context.MODE_PRIVATE).getBoolean("avoid_hw", true)
+        ride = getSharedPreferences("motonav", Context.MODE_PRIVATE).getBoolean("ride_navigation", false)
 
         // 地图铺满整个屏幕（包括状态栏下面），上下的卡片按系统栏留出空间
         window.statusBarColor = Color.TRANSPARENT
@@ -164,7 +172,7 @@ class RoutePlanActivity : AppCompatActivity() {
 
         scrim = View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(Color.parseColor("#E60E0A14"), Color.TRANSPARENT))
+                intArrayOf(Color.parseColor("#B3F5F5F5"), Color.TRANSPARENT))
         }
         root.addView(scrim, FrameLayout.LayoutParams(-1, dp(90)))
 
@@ -188,7 +196,7 @@ class RoutePlanActivity : AppCompatActivity() {
             searchBar.requestLayout()
             scrim.layoutParams.height = top + dp(90)
             panel.setPadding(0, top + dp(74), 0, max(bottom, ime) + dp(12))
-            sheet.setPadding(dp(14), dp(14), dp(14), bottom + dp(12))
+            sheet.setPadding(dp(12), dp(12), dp(12), bottom + dp(12))
             ins
         }
 
@@ -265,7 +273,7 @@ class RoutePlanActivity : AppCompatActivity() {
 
     private fun onShareLoaded(r: AmapShare.Route) {
         if (r.importNote.isNotBlank()) {
-            androidx.appcompat.app.AlertDialog.Builder(this)
+            androidx.appcompat.app.AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
                 .setTitle("原驾车路线暂时无法读取")
                 .setMessage(r.importNote)
                 .setPositiveButton("按起终点规划") { _, _ -> showSharedRoute(r) }
@@ -285,7 +293,7 @@ class RoutePlanActivity : AppCompatActivity() {
         sharePoly?.remove()
         sharePoly = if (r.endpointsOnly && r.pts.size <= 2) null else try {
             aMap?.addPolyline(PolylineOptions().addAll(r.pts.map { LatLng(it[0], it[1]) })
-                .width(S.dp(this, 5f)).color(Color.parseColor("#CCFFB547")).setDottedLine(!r.endpointsOnly).zIndex(20f))
+                .width(S.dp(this, 5f)).color(Color.parseColor("#995B87EB")).setDottedLine(!r.endpointsOnly).zIndex(20f))
         } catch (_: Throwable) { null }
         val info = "高德${r.kind}" + (if (r.distance > 0) " · ${S.distText(r.distance)} · ${S.durText(r.timeS)}" else "") +
             (if (r.lights > 0) " · ${r.lights}灯" else "") +
@@ -323,7 +331,7 @@ class RoutePlanActivity : AppCompatActivity() {
             .interval(2000)
             .myLocationIcon(BitmapDescriptorFactory.fromBitmap(myDot()))
             .strokeColor(Color.TRANSPARENT)
-            .radiusFillColor(Color.parseColor("#2243E1F0"))
+            .radiusFillColor(Color.parseColor("#225B87EB"))
         m.setMyLocationStyle(style)
         m.setMyLocationEnabled(true)
         m.setOnMyLocationChangeListener { loc ->
@@ -337,18 +345,18 @@ class RoutePlanActivity : AppCompatActivity() {
         }
     }
 
-    /** 我的位置：青色圆点 + 白圈 */
+    /** 我的位置：蓝色圆点 + 白圈 */
     private fun myDot(): Bitmap {
         val s = dp(26)
         val b = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
         val c = Canvas(b); val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = Color.parseColor("#5543E1F0"); c.drawCircle(s / 2f, s / 2f, s / 2f, p)
+        p.color = Color.parseColor("#335B87EB"); c.drawCircle(s / 2f, s / 2f, s / 2f, p)
         p.color = Color.WHITE; c.drawCircle(s / 2f, s / 2f, s * 0.3f, p)
-        p.color = S.CYAN; c.drawCircle(s / 2f, s / 2f, s * 0.21f, p)
+        p.color = S.PINK; c.drawCircle(s / 2f, s / 2f, s * 0.21f, p)
         return b
     }
 
-    /** 目的地：粉色水滴形图钉 */
+    /** 目的地：蓝色水滴形图钉，浅灰细边 */
     private fun pin(): Bitmap {
         val w = dp(34); val h = dp(44)
         val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -357,7 +365,7 @@ class RoutePlanActivity : AppCompatActivity() {
         val path = Path()
         path.addCircle(cx, cy, r, Path.Direction.CW)
         path.moveTo(cx - r * 0.62f, cy + r * 0.78f); path.lineTo(cx, h - dp(2).toFloat()); path.lineTo(cx + r * 0.62f, cy + r * 0.78f); path.close()
-        p.color = Color.parseColor("#990E0A14"); p.style = Paint.Style.STROKE; p.strokeWidth = dp(3).toFloat()
+        p.color = S.STROKE; p.style = Paint.Style.STROKE; p.strokeWidth = S.dp(this, 0.8f)
         c.drawPath(path, p)
         p.style = Paint.Style.FILL; p.color = S.PINK; c.drawPath(path, p)
         p.color = Color.WHITE; c.drawCircle(cx, cy, r * 0.4f, p)
@@ -370,12 +378,13 @@ class RoutePlanActivity : AppCompatActivity() {
         searchBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = S.round(this@RoutePlanActivity, S.CARD_SOLID, 16f, S.STROKE)
-            elevation = S.dp(this@RoutePlanActivity, 8f)
+            background = S.round(this@RoutePlanActivity, S.CARD_SOLID, 10f, S.STROKE)
+            elevation = S.dp(this@RoutePlanActivity, 3f)
         }
         val back = TextView(this).apply {
             text = "‹"; textSize = 30f; setTextColor(S.TEXT); gravity = Gravity.CENTER
             setPadding(dp(14), 0, dp(6), dp(4))
+            background = S.pressedRound(this@RoutePlanActivity, Color.TRANSPARENT, S.SELECTED_BG, 8f)
             setOnClickListener { goBack() }
         }
         input = EditText(this).apply {
@@ -386,13 +395,14 @@ class RoutePlanActivity : AppCompatActivity() {
         }
         clearBtn = TextView(this).apply {
             text = "✕"; textSize = 16f; setTextColor(S.SUB); gravity = Gravity.CENTER
-            setPadding(dp(10), 0, dp(8), 0); visibility = View.GONE
+            setPadding(dp(10), 0, dp(8), 0); visibility = View.GONE; background = S.pressedRound(this@RoutePlanActivity, Color.TRANSPARENT, S.SELECTED_BG, 8f)
             setOnClickListener { input.setText(""); toSearchMode() }
         }
         // v6.8 打完字点“搜索”（或按回车）才搜，不再每打一个字就搜
         val goBtn = TextView(this).apply {
             text = "搜索"; textSize = 15f; setTextColor(S.PINK); typeface = S.MEDIUM; gravity = Gravity.CENTER
             setPadding(dp(8), 0, dp(16), 0)
+            background = S.pressedRound(this@RoutePlanActivity, Color.TRANSPARENT, S.SELECTED_BG, 8f)
             setOnClickListener { searchOrPick(forceSearch = true) }
         }
         searchBar.addView(back, LinearLayout.LayoutParams(-2, -1))
@@ -489,7 +499,8 @@ class RoutePlanActivity : AppCompatActivity() {
     private fun row(name: String, sub: String, lat: Double, lng: Double, dotColor: Int, showDist: Boolean = true, onClick: () -> Unit): View {
         val r = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            background = S.round(this@RoutePlanActivity, S.CARD_SOLID, 14f)
+            background = S.pressedRound(this@RoutePlanActivity, S.CARD_SOLID, S.SELECTED_BG, 10f, S.STROKE)
+            minimumHeight = dp(60)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             setOnClickListener { onClick() }
         }
@@ -507,7 +518,7 @@ class RoutePlanActivity : AppCompatActivity() {
         r.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
         if (!myLat.isNaN() && showDist) {
             r.addView(TextView(this).apply {
-                text = S.distText(distM(myLat, myLng, lat, lng).toInt()); textSize = 13f; setTextColor(S.CYAN)
+                text = S.distText(distM(myLat, myLng, lat, lng).toInt()); textSize = 13f; setTextColor(S.PINK)
                 setPadding(dp(10), 0, 0, 0)
             })
         }
@@ -564,7 +575,7 @@ class RoutePlanActivity : AppCompatActivity() {
         listBox.removeAllViews()
         // v4.4 导入高德分享的路线（高德里规划好的摩托车路线）
         if (!addingVia)
-            addRow(row("粘贴高德分享的路线", "高德里规划好路线 → 分享 → 复制链接，再点这里", 0.0, 0.0, S.AMBER, showDist = false) { pasteShare() })
+            addRow(row("粘贴高德分享的路线", "高德里规划好路线 → 分享 → 复制链接，再点这里", 0.0, 0.0, S.PINK, showDist = false) { pasteShare() })
         val h = loadHistory()
         if (h.length() == 0) {
             listBox.addView(TextView(this).apply {
@@ -578,16 +589,17 @@ class RoutePlanActivity : AppCompatActivity() {
             val o = h.optJSONObject(i) ?: continue
             val n = o.optString("n"); val a = o.optString("a")
             val la = o.optDouble("la"); val lo = o.optDouble("lo")
-            addRow(row(n, a, la, lo, S.PURPLE) { chooseDest(n, a, la, lo) })
+            addRow(row(n, a, la, lo, S.PINK) { chooseDest(n, a, la, lo) })
         }
         listBox.addView(TextView(this).apply {
-            text = "清除记录"; textSize = 13f; setTextColor(S.SUB); gravity = Gravity.CENTER
-            setPadding(0, dp(10), 0, dp(10))
+            text = "清除记录"; textSize = 13f; setTextColor(S.HINT); gravity = Gravity.CENTER
+            minHeight = dp(42)
+            background = S.pressedRound(this@RoutePlanActivity, Color.TRANSPARENT, S.SELECTED_BG, 8f)
             setOnClickListener {
                 getSharedPreferences("motonav", Context.MODE_PRIVATE).edit().putString("nav_history", "[]").apply()
                 showHistory()
             }
-        })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
     }
 
     // ================= 选路线 =================
@@ -597,10 +609,10 @@ class RoutePlanActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 setColor(S.CARD_SOLID)
-                val r = S.dp(this@RoutePlanActivity, 22f)
+                val r = S.dp(this@RoutePlanActivity, 20f)
                 cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             }
-            elevation = S.dp(this@RoutePlanActivity, 12f)
+            elevation = S.dp(this@RoutePlanActivity, 3f)
             visibility = View.GONE
             isClickable = true
         }
@@ -624,8 +636,14 @@ class RoutePlanActivity : AppCompatActivity() {
         top.addView(hwChip, LinearLayout.LayoutParams(-2, dp(32)).apply { leftMargin = dp(8) })
         top.addView(emuChip, LinearLayout.LayoutParams(-2, dp(32)).apply { leftMargin = dp(6) })
         sheet.addView(top)
+        modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        driveChip = chip("驾车") { changeTravelMode(false) }
+        rideChip = chip("骑行（自行车）") { changeTravelMode(true) }
+        modeRow.addView(driveChip, LinearLayout.LayoutParams(0, dp(48), 1f))
+        modeRow.addView(rideChip, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
+        sheet.addView(modeRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         favoriteButton = TextView(this).apply {
-            textSize = 13f; setTextColor(S.CYAN); gravity = Gravity.CENTER_VERTICAL; minHeight = dp(40)
+            textSize = 13f; setTextColor(S.PINK); gravity = Gravity.CENTER_VERTICAL; minHeight = dp(40); setPadding(dp(10), 0, dp(10), 0); background = S.pressedRound(this@RoutePlanActivity, Color.TRANSPARENT, S.SELECTED_BG, 8f)
             setOnClickListener {
                 if (RideTrackMath.valid(destLat,destLng)) FavoritePlacesUi.save(this@RoutePlanActivity,destName,destAddr,destLat,destLng) { updateFavoriteButton() }
             }
@@ -638,10 +656,10 @@ class RoutePlanActivity : AppCompatActivity() {
         }
         viaRow.addView(viaText, LinearLayout.LayoutParams(0, -2, 1f))
         val viaAdd = chip("+ 途经点") { startViaSearch() }.apply {
-            background = S.round(this@RoutePlanActivity, S.CARD2, 16f, S.STROKE); setTextColor(S.CYAN)
+            background = S.pressedRound(this@RoutePlanActivity, S.CARD2, S.SELECTED_BG, 10f, S.STROKE); setTextColor(S.CYAN)
         }
         viaClear = chip("清除") { vias.clear(); refreshVias(); calculate() }.apply {
-            background = S.round(this@RoutePlanActivity, S.CARD2, 16f, S.STROKE); setTextColor(S.SUB)
+            background = S.pressedRound(this@RoutePlanActivity, S.CARD2, S.SELECTED_BG, 10f, S.STROKE); setTextColor(S.SUB)
         }
         viaRow.addView(viaAdd, LinearLayout.LayoutParams(-2, dp(30)).apply { leftMargin = dp(8) })
         viaRow.addView(viaClear, LinearLayout.LayoutParams(-2, dp(30)).apply { leftMargin = dp(6) })
@@ -664,12 +682,12 @@ class RoutePlanActivity : AppCompatActivity() {
         startBtn = TextView(this).apply {
             text = "开始导航"; textSize = 18f; setTextColor(Color.WHITE); typeface = S.BOLD
             letterSpacing = 0.08f; gravity = Gravity.CENTER
-            background = S.gradient(this@RoutePlanActivity, 16f)
+            background = S.pressedGradient(this@RoutePlanActivity, 10f)
             setOnClickListener { startNav() }
         }
-        sheet.addView(startBtn, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(12) })
+        sheet.addView(startBtn, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(12) })
         amapShareBtn = chip("用高德打开分享") { shareRoute?.let { openAmapShare(it.sourceUrl, it.nativeUri) } }.apply {
-            visibility = View.GONE; setTextColor(S.AMBER)
+            visibility = View.GONE; setTextColor(S.SUB); background = S.pressedRound(this@RoutePlanActivity, S.CARD2, S.SELECTED_BG, 10f, S.STROKE)
         }
         sheet.addView(amapShareBtn, LinearLayout.LayoutParams(-1, dp(40)))
         root.addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
@@ -683,18 +701,46 @@ class RoutePlanActivity : AppCompatActivity() {
     }
 
     private fun styleChips() {
-        for ((c, on) in listOf(hwChip to avoidHighway, emuChip to emulate)) {
-            c.background = S.round(this, if (on) Color.parseColor("#33FF4FB4") else S.CARD2, 16f, if (on) S.PINK else S.STROKE)
+        for ((c, on) in listOf(hwChip to avoidHighway, emuChip to emulate, driveChip to !isTravel, rideChip to isTravel)) {
+            c.background = S.pressedRound(this, if (on) S.SELECTED_BG else S.CARD2, S.SELECTED_BG, 10f, if (on) S.PINK else S.STROKE)
             c.setTextColor(if (on) S.PINK else S.SUB)
+            c.isSelected = on
+        }
+        modeRow.visibility = if (shareRoute == null) View.VISIBLE else View.GONE
+        hwChip.visibility = if (isTravel) View.GONE else View.VISIBLE
+        for (c in listOf(driveChip, rideChip, hwChip)) {
+            c.isEnabled = !calculating && !starting
+            c.alpha = if (c.isEnabled) 1f else 0.5f
         }
         emuChip.text = if (emulate) "模拟 ✓" else "模拟"
     }
 
+    private fun changeTravelMode(travel: Boolean) {
+        if (shareRoute != null || calculating || starting || ride == travel) return
+        if (travel && vias.isNotEmpty()) {
+            androidx.appcompat.app.AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
+                .setTitle("切换为骑行（自行车）？")
+                .setMessage("骑行暂不支持途经点。切换后将移除当前 ${vias.size} 个途经点，并重新规划到目的地的骑行路线。")
+                .setPositiveButton("移除途经点并切换") { _, _ -> applyTravelMode(travel) }
+                .setNegativeButton("保留驾车路线", null).show()
+        } else applyTravelMode(travel)
+    }
+
+    private fun applyTravelMode(travel: Boolean) {
+        if (shareRoute != null || calculating || starting) return
+        if (travel) clearVias()
+        ride = travel
+        getSharedPreferences("motonav", Context.MODE_PRIVATE).edit().putBoolean("ride_navigation", ride).apply()
+        styleChips()
+        refreshVias()
+        calculate()
+    }
+
     private fun buildLocButton() {
         locBtn = TextView(this).apply {
-            text = "◎"; textSize = 22f; setTextColor(S.CYAN); gravity = Gravity.CENTER
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(S.CARD_SOLID); setStroke(dp(1), S.STROKE) }
-            elevation = S.dp(this@RoutePlanActivity, 6f)
+            text = "◎"; textSize = 22f; setTextColor(S.PINK); gravity = Gravity.CENTER
+            background = S.pressedOval(this@RoutePlanActivity, S.CARD_SOLID, S.SELECTED_BG, S.STROKE)
+            elevation = S.dp(this@RoutePlanActivity, 3f)
             visibility = View.GONE
             setOnClickListener {
                 if (!myLat.isNaN()) aMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(myLat, myLng), 16f))
@@ -711,7 +757,7 @@ class RoutePlanActivity : AppCompatActivity() {
 
     private lateinit var favoriteButton: TextView
     private fun updateFavoriteButton() {
-        favoriteButton.text = if (FavoritePlaces.find(this,destLat,destLng)==null) "☆ 收藏到常用目的地" else "★ 已收藏 · 改名 / 删除"
+        favoriteButton.text = if (FavoritePlaces.find(this,destLat,destLng)==null) "◇ 收藏到常用目的地" else "◆ 已收藏 · 改名 / 删除"
     }
 
     private fun chooseDest(name: String, addr: String, lat: Double, lng: Double, share: AmapShare.Route? = null) {
@@ -719,7 +765,7 @@ class RoutePlanActivity : AppCompatActivity() {
         if (share == null) clearShare()                 // v4.4 自己选的目的地：不再按分享的路线走
         clearVias()                                     // v4.9 新目的地：途经点清空
         shareRoute = share
-        hwChip.visibility = if (share?.isTravel == true) View.GONE else View.VISIBLE
+        styleChips()
         amapShareBtn.visibility = if (!share?.sourceUrl.isNullOrBlank()) View.VISIBLE else View.GONE
         destName = name; destAddr = addr; destLat = lat; destLng = lng
         updateFavoriteButton()
@@ -743,6 +789,7 @@ class RoutePlanActivity : AppCompatActivity() {
     // ================= v4.9 途经点 =================
 
     private fun startViaSearch() {
+        if (isTravel) return
         if (vias.size >= 3) { Toast.makeText(this, "最多 3 个途经点", Toast.LENGTH_SHORT).show(); return }
         addingVia = true
         sheet.visibility = View.GONE
@@ -784,7 +831,7 @@ class RoutePlanActivity : AppCompatActivity() {
     private fun refreshVias() {
         for (m in viaMarkers) { try { m.remove() } catch (_: Throwable) {} }
         viaMarkers.clear()
-        viaRow.visibility = if (shareRoute != null) View.GONE else View.VISIBLE      // 分享的路线自带途经点
+        viaRow.visibility = if (shareRoute != null || isTravel) View.GONE else View.VISIBLE
         viaText.text = if (vias.isEmpty()) "途经：无" else "途经：" + vias.joinToString(" → ") { it.name }
         viaClear.visibility = if (vias.isEmpty()) View.GONE else View.VISIBLE
         for ((i, v) in vias.withIndex()) {
@@ -793,7 +840,7 @@ class RoutePlanActivity : AppCompatActivity() {
         }
     }
 
-    /** 途经点标记：紫色圆点里写序号 */
+    /** 途经点标记：蓝色圆点里写序号 */
     private fun viaDot(n: Int): Bitmap {
         val sz = dp(26)
         val b = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
@@ -845,20 +892,24 @@ class RoutePlanActivity : AppCompatActivity() {
     }
 
     private fun calculate(retry: Int = 1) {
+        clearRoutes()
         val n = NaviBridge.attach(this)
         if (n == null) { showStatus("导航初始化失败：${NaviBridge.lastInfo}"); return }
         navi = n
-        clearRoutes()
         calculating = true
+        styleChips()
         val seq = ++calcSeq
-        showStatus("正在规划路线…")
-        NaviBridge.routeCallback = { ok, res -> if (seq == calcSeq) onRouteResult(ok, res) }
+        val travel = isTravel
+        showStatus(if (travel) "正在规划骑行（自行车）路线…" else "正在规划驾车路线…")
+        NaviBridge.routeCallback = { ok, res ->
+            if (seq == calcSeq && travel == isTravel) onRouteResult(ok, res)
+        }
         val sr = shareRoute
         // v4.4 按分享的路线走：沿路挑途经点，不躲避拥堵（免得绕开原路线），只要一条路线
         val wps: ArrayList<NaviLatLng> = if (sr != null) ArrayList(if (sr.endpointsOnly) emptyList() else AmapShare.waypoints(sr, myLat, myLng))
             else ArrayList(vias.map { NaviLatLng(it.lat, it.lng) })                  // v4.9 自己加的途经点
         NaviBridge.realWaypoints = sr == null && vias.isNotEmpty()                  // v7.9 到途经点放特效
-        val strategy = try {
+        val strategy = if (travel) 0 else try {
             if (sr != null) n.strategyConvert(false, avoidHighway, false, false, false)
             else n.strategyConvert(true, avoidHighway, false, false, true)
         } catch (_: Exception) { 10 }
@@ -867,28 +918,42 @@ class RoutePlanActivity : AppCompatActivity() {
         val started = try {
             if (sr != null) ShareRouting.calculate(n, sr, myLat, myLng, wps, strategy)
             else {
-                n.setIsNaviTravelView(false)
-                n.setMultipleRouteNaviMode(true)
-                if (!myLat.isNaN()) n.calculateDriveRoute(arrayListOf(NaviLatLng(myLat, myLng)), to, wps, strategy)
+                n.setIsNaviTravelView(travel)
+                n.setMultipleRouteNaviMode(!travel)
+                if (travel) {
+                    if (myLat.isNaN() || myLng.isNaN()) false
+                    else n.calculateRideRoute(
+                        NaviPoi("当前位置", LatLng(myLat, myLng), ""),
+                        emptyList(),
+                        NaviPoi(destName, LatLng(destLat, destLng), ""),
+                        TravelStrategy.SINGLE,
+                    )
+                } else if (!myLat.isNaN()) n.calculateDriveRoute(arrayListOf(NaviLatLng(myLat, myLng)), to, wps, strategy)
                 else n.calculateDriveRoute(to, wps, strategy)
             }
         } catch (e: Exception) { false }
         if (!started) {
-            calculating = false
             if (retry > 0) {                     // 导航引擎可能还没初始化好：1.5 秒后自动再试一次
                 handler.postDelayed({ if (seq == calcSeq && sheet.visibility == View.VISIBLE) calculate(retry - 1) }, 1500)
                 return
             }
+            calculating = false
+            styleChips()
             showStatus("路线规划没能开始（还没定位？）\n点这里重试", true); return
         }
         handler.postDelayed({
-            if (seq == calcSeq && calculating) { calculating = false; showStatus("规划超时，点这里重试", true) }
+            if (seq == calcSeq && calculating) {
+                calculating = false
+                styleChips()
+                showStatus("规划超时，点这里重试", true)
+            }
         }, 20_000)
     }
 
     private fun onRouteResult(ok: Boolean, res: Any?) {
         if (!calculating) return                  // 高德新旧两种回调可能都来一次，只处理第一次
         calculating = false
+        styleChips()
         val n = navi ?: return
         if (!ok) {
             val code = Refl.int(res, "getErrorCode") ?: (res as? Int)
@@ -915,7 +980,8 @@ class RoutePlanActivity : AppCompatActivity() {
         cardsRow.visibility = View.VISIBLE
         startBtn.alpha = 1f; startBtn.isEnabled = true
         select(ids[0])
-        sheet.post { zoomToRoutes(paths) }
+        val seq = calcSeq
+        sheet.post { if (seq == calcSeq) zoomToRoutes(paths) }
     }
 
     /** v4.4 比较 SDK 算出的路线和分享的路线，结果写在目的地下面 */
@@ -969,7 +1035,7 @@ class RoutePlanActivity : AppCompatActivity() {
                 minimumHeight = dp(86)
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(10), dp(8), dp(8), dp(8))
-                background = if (sel) GlowBorder.make(this@RoutePlanActivity, 14f) else S.round(this@RoutePlanActivity, S.CARD2, 14f)
+                background = S.pressedRound(this@RoutePlanActivity, if (sel) S.SELECTED_BG else S.CARD_SOLID, S.SELECTED_BG, 10f, if (sel) S.PINK else S.STROKE)
                 setOnClickListener { select(id) }
             }
             val label = (Refl.str(p, "getLabels") ?: "").split(",", "，", " ").firstOrNull { it.isNotBlank() }
@@ -1019,6 +1085,8 @@ class RoutePlanActivity : AppCompatActivity() {
     private fun clearRoutes() {
         calcSeq++
         calculating = false
+        NaviBridge.routeCallback = null
+        styleChips()
         for (o in overlays.values) { try { o.removeFromMap(); o.destroy() } catch (_: Throwable) {} }
         overlays.clear()
         routeIds = IntArray(0); selected = -1
@@ -1026,12 +1094,14 @@ class RoutePlanActivity : AppCompatActivity() {
     }
 
     private fun startNav() {
-        if (selected < 0 || starting) return
+        if (selected < 0 || starting || calculating) return
         starting = true
+        styleChips()
         try { navi?.selectRouteId(selected) } catch (_: Exception) {}
         NaviBridge.routeCallback = null
         ShareGuide.start(shareRoute, this, avoidHighway, myLat, myLng)          // v4.5 偏航跟随原路线 + 原路线细线
-        startActivity(Intent(this, NavActivity::class.java).putExtra("emu", emulate).putExtra("dest", destName))
+        startActivity(Intent(this, NavActivity::class.java).putExtra("emu", emulate).putExtra("dest", destName)
+            .putExtra(NavActivity.EXTRA_TRAVEL, isTravel))
         finish()
     }
 

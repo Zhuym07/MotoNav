@@ -37,3 +37,10 @@ private*
 
 __pycache__/
 *.pyc
+
+# Local hardware captures, build experiments and editor backups
+/artifacts/
+/serial-*.txt
+/phone-screen.png
+/quote-test.txt
+*.bak

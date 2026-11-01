@@ -26,7 +26,9 @@ import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDialog
 
 /**
  * MotoNav 手机 App
@@ -150,21 +152,26 @@ import androidx.appcompat.app.AppCompatActivity
  *         设置分成「圆屏显示 / 导航语音 / 圆屏设置 / 地图 Key」四组，可折叠，收起时显示一行当前设置；
  *         调试信息、测试按钮、屏幕速度、地图来源、帧率等挪进「开发者选项」，默认隐藏（连点 5 下版本号打开）
  */
-const val APP_VERSION = "v8.3.21"
+const val APP_VERSION = "v8.3.24"
 
 class MainActivity : AppCompatActivity() {
-    // ---------------- 配色（罪恶都市夜景：深紫黑底、霓虹粉、青色） ----------------
-    private val BG = Color.parseColor("#0E0A14")
-    private val CARD = Color.parseColor("#1A1424")
-    private val STROKE = Color.parseColor("#2C2338")
-    private val TEXT = Color.parseColor("#F3EEF8")
-    private val SUB = Color.parseColor("#9D93AB")
-    private val PINK = Color.parseColor("#FF4FB4")
-    private val PURPLE = Color.parseColor("#8E5CFF")
-    private val CYAN = Color.parseColor("#43E1F0")
-    private val GREEN = Color.parseColor("#3DDC84")
-    private val AMBER = Color.parseColor("#FFB547")
-    private val RED = Color.parseColor("#FF5A6A")
+    // ---------------- Smartisan OS 8：灰阶底、白卡片、低饱和蓝 ----------------
+    private val BG = NavStyle.BG
+    private val CARD = NavStyle.CARD_SOLID
+    private val CARD_SOLID = NavStyle.CARD_SOLID
+    private val CARD2 = NavStyle.CARD2
+    private val HINT = NavStyle.HINT
+    private val SELECTED_BG = NavStyle.SELECTED_BG
+    private val STROKE = NavStyle.STROKE
+    private val TEXT = NavStyle.TEXT
+    private val TITLE = NavStyle.TITLE
+    private val SUB = NavStyle.SUB
+    private val PINK = NavStyle.PINK
+    private val PURPLE = NavStyle.PURPLE
+    private val CYAN = NavStyle.CYAN
+    private val GREEN = NavStyle.GREEN
+    private val AMBER = NavStyle.AMBER
+    private val RED = NavStyle.RED
 
     private val handler = Handler(Looper.getMainLooper())
     private val refreshers = ArrayList<() -> Unit>()       // 每 0.2 秒刷新一次的界面元素
@@ -188,11 +195,18 @@ class MainActivity : AppCompatActivity() {
 
         window.statusBarColor = BG
         window.navigationBarColor = BG
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= 26) window.decorView.systemUiVisibility =
+            window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= 27) window.decorView.systemUiVisibility =
+            window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         supportActionBar?.hide()                       // 不要系统自带的标题栏
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(20), dp(16), dp(28))
+            setBackgroundColor(BG)
+            setPadding(0, 0, 0, dp(24))
         }
 
         // v8.2 首页：状态 → 去哪儿 → 巡航 → 设置（每组可以折叠，平时只看一行摘要）→ 开发者选项（默认隐藏）
@@ -203,11 +217,11 @@ class MainActivity : AppCompatActivity() {
         root.addView(cruiseCard())
         root.addView(rideCard())
         root.addView(sectionTitle("设置"))
-        root.addView(section("map", "🗺", "圆屏显示", { mapSummary() }) { mapSection(it) })
-        root.addView(section("voice", "🔊", "导航语音", { voiceSummary() }) { voiceSection(it) })   // v3.8
-        root.addView(section("screen", "⌚", "圆屏设置", { screenSummary() }) { screenSection(it) })
-        root.addView(section("key", "🔑", "地图 Key", { keySummary() }, forceOpen = !Keys.allFilled(this)) { keySection(it) })   // v6.2
-        devWrap = section("dev", "🛠", "开发者选项", { "调试信息、测试按钮、屏幕速度、地图来源" }) { devSection(it) }.apply {
+        root.addView(section("map", "▦", "导航屏显示", { mapSummary() }) { mapSection(it) })
+        root.addView(section("voice", "◉", "导航语音", { voiceSummary() }) { voiceSection(it) })   // v3.8
+        root.addView(section("screen", "◫", "导航屏设置", { screenSummary() }) { screenSection(it) })
+        root.addView(section("key", "⌘", "地图 Key", { keySummary() }, forceOpen = !Keys.allFilled(this)) { keySection(it) })   // v6.2
+        devWrap = section("dev", "⋯", "开发者选项", { "调试信息、测试按钮、屏幕速度、地图来源" }) { devSection(it) }.apply {
             visibility = if (uiPrefs.getBoolean("dev_mode", false)) View.VISIBLE else View.GONE
         }
         root.addView(devWrap)
@@ -243,34 +257,37 @@ class MainActivity : AppCompatActivity() {
 
     // ================= 页面各部分 =================
 
-    /** 顶部标题：霓虹粉斜体 MotoNav，带青色光晕 */
-    private fun header(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(4), dp(4), 0, dp(14))
-        addView(TextView(context).apply {
+    /** 48dp 白色标题栏：标题居中，版本号作为右侧弱提示 */
+    private fun header(): View = FrameLayout(this).apply {
+        setBackgroundColor(CARD)
+        val title = TextView(this@MainActivity).apply {
             text = "MotoNav"
-            textSize = 34f
-            setTextColor(PINK)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
-            letterSpacing = 0.04f
-            setShadowLayer(dpf(10f), 0f, 0f, CYAN)
-        })
-        addView(TextView(context).apply {
-            text = "圆屏导航 · App $APP_VERSION"
-            textSize = 13f
-            setTextColor(SUB)
-            letterSpacing = 0.08f
-            setOnClickListener { onVersionTap() }       // v8.2 连点 5 下：开 / 关开发者选项
-        })
+            textSize = 16f
+            setTextColor(TITLE)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setOnClickListener { onVersionTap() }
+        }
+        addView(title, FrameLayout.LayoutParams(-1, dp(48), Gravity.CENTER))
+        addView(TextView(this@MainActivity).apply {
+            text = APP_VERSION
+            textSize = 10.5f
+            setTextColor(NavStyle.HINT)
+            gravity = Gravity.CENTER
+            setPadding(dp(8), 0, dp(12), 0)
+            setOnClickListener { onVersionTap() }
+        }, FrameLayout.LayoutParams(-2, -1, Gravity.END))
+        addView(View(this@MainActivity).apply { setBackgroundColor(NavStyle.DIVIDER) },
+            FrameLayout.LayoutParams(-1, dp(1), Gravity.BOTTOM))
     }
 
     /** 准备工作（权限、电池）：都完成后自动隐藏 */
     private fun setupCard(): View {
         val card = card()
         card.addView(label("出发前准备", 15f, TEXT, bold = true))
-        card.addView(label("完成下面两项后，锁屏也能稳定给圆屏发数据", 12f, SUB).apply { setPadding(0, dp(2), 0, dp(10)) })
-        val permBtn = pillButton("授予权限", PURPLE) { requestAllPermissions() }
-        val batBtn = pillButton("电池设为「不限制」", PURPLE) { requestIgnoreBatteryOptimization() }
+        card.addView(label("完成下面两项后，锁屏也能稳定给导航屏发数据", 12f, SUB).apply { setPadding(0, dp(2), 0, dp(10)) })
+        val permBtn = pillButton("授予权限", PINK) { requestAllPermissions() }
+        val batBtn = pillButton("电池设为「不限制」", STROKE) { requestIgnoreBatteryOptimization() }
         card.addView(permBtn, lpMatch(bottom = 8))
         card.addView(batBtn, lpMatch())
         refreshers += {
@@ -301,8 +318,8 @@ class MainActivity : AppCompatActivity() {
             setHintTextColor(SUB)
             setSingleLine(true)
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
-            setPadding(dp(16), 0, dp(16), 0)
-            background = GradientDrawable().apply { setColor(BG); cornerRadius = dpf(14f) }
+            setPadding(dp(14), 0, dp(14), 0)
+            background = NavStyle.round(this@MainActivity, NavStyle.CARD2, 10f, STROKE)
         }
         searchInput = input
         val go = pillButton("搜索", PINK) { homeSearchNow() }.apply { textSize = 16f }
@@ -315,7 +332,7 @@ class MainActivity : AppCompatActivity() {
 
         // 没输入时：粘贴分享路线 + 最近去过
         val idle = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        idle.addView(label("📋  粘贴高德分享的路线", 16f, AMBER, bold = true).apply {
+        idle.addView(label("▤  粘贴高德分享的路线", 16f, PINK, bold = true).apply {
             setPadding(0, dp(12), 0, dp(4))
             setOnClickListener { pasteShareFromHome() }
         })
@@ -327,12 +344,12 @@ class MainActivity : AppCompatActivity() {
         fun showHistory() {
             hist.removeAllViews()
             val favorites = FavoritePlaces.load(this)
-            hist.addView(label("★ 常用目的地", 14f, CYAN, bold = true).apply { setPadding(0, dp(12), 0, dp(2)) })
+            hist.addView(label("◇  常用目的地", 14f, TITLE, bold = true).apply { setPadding(0, dp(12), 0, dp(2)) })
             if (favorites.isEmpty()) hist.addView(label("在路线规划页点「收藏到常用目的地」添加", 12f, SUB))
             favorites.take(4).forEach { p ->
                 hist.addView(placeRow(p.name, p.addr) { openPlan(p.name, p.addr, p.lat, p.lng) })
             }
-            hist.addView(label("管理常用目的地（${favorites.size}/50）", 13f, CYAN).apply {
+            hist.addView(label("管理常用目的地（${favorites.size}/50）", 13f, NavStyle.CYAN).apply {
                 minHeight = dp(44); gravity = Gravity.CENTER_VERTICAL
                 setOnClickListener { FavoritePlacesUi.manage(this@MainActivity, { showHistory() }) { p -> openPlan(p.name,p.addr,p.lat,p.lng) } }
             })
@@ -378,10 +395,13 @@ class MainActivity : AppCompatActivity() {
     private fun placeRow(name: String, addr: String, onClick: () -> Unit): View {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(10), 0, dp(10))
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(60)
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            background = NavStyle.pressedRound(this@MainActivity, Color.TRANSPARENT, NavStyle.CARD2, 8f)
             setOnClickListener { onClick() }
         }
-        box.addView(label(name, 17f, TEXT).apply { isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END })
+        box.addView(label(name, 16f, TEXT).apply { isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END })
         if (addr.isNotBlank()) box.addView(label(addr, 12f, SUB).apply {
             isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(0, dp(2), 0, 0)
         })
@@ -460,7 +480,7 @@ class MainActivity : AppCompatActivity() {
         val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val t = try { cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString() } catch (_: Exception) { null }
         if (AmapShare.findUrl(t) == null) {
-            android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
                 .setMessage("剪贴板里没有高德的分享链接。\n\n在高德 App 里规划好路线 → 分享 → 复制链接（或直接分享给 MotoNav），再回来点这里。")
                 .setPositiveButton("知道了", null).show()
             return
@@ -491,7 +511,7 @@ class MainActivity : AppCompatActivity() {
         col.addView(label("巡航模式", 16f, TEXT, bold = true))
         col.addView(label("不设目的地，提醒测速和危险路段；连续10分钟未移动自动结束", 12f, SUB).apply { setPadding(0, dp(2), dp(10), 0) })
         row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val cruise = pillButton("开始", CYAN) {
+        val cruise = pillButton("开始", PINK) {
             if (NaviBridge.cruising) {
                 NaviBridge.stopCruise()
             } else {
@@ -506,7 +526,10 @@ class MainActivity : AppCompatActivity() {
         refreshers += {
             val on = NaviBridge.cruising
             cruise.text = if (on) "结束" else "开始"
-            (cruise.background as? GradientDrawable)?.setColor(if (on) Color.parseColor("#2A7F88") else Color.parseColor("#36B8C6"))
+            cruise.setTextColor(if (on) RED else Color.WHITE)
+            cruise.background = if (on)
+                NavStyle.pressedRound(this, CARD, NavStyle.CARD2, 10f, STROKE)
+            else NavStyle.pressedGradient(this, 10f)
         }
         return wrapMargin(card)
     }
@@ -523,16 +546,17 @@ class MainActivity : AppCompatActivity() {
         col.addView(title); col.addView(sub)
         top.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val bat = TextView(this).apply {
-            textSize = 13f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
-            setPadding(dp(10), dp(4), dp(10), dp(4))
-            background = GradientDrawable().apply { setColor(BG); cornerRadius = dpf(12f) }
+            textSize = 12f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
+            setPadding(dp(9), dp(4), dp(9), dp(4))
+            background = NavStyle.round(this@MainActivity, NavStyle.CARD2, 8f, STROKE)
+            setTextColor(SUB)
         }
         top.addView(bat, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = dp(8) })
         top.setOnClickListener {                          // v6.9 旧配对对不上时：点一下打开系统蓝牙设置
             if (BleLink.needUnbond) try { startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) } catch (_: Exception) {}
         }
         card.addView(top)
-        val reconnect = textLink("重新连接圆屏") { BleLink.connect(this) }
+        val reconnect = textLink("重新连接导航屏") { BleLink.connect(this) }
         card.addView(reconnect, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4); leftMargin = dp(24) })
         // 导航 / 巡航中
         val navBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -557,9 +581,9 @@ class MainActivity : AppCompatActivity() {
             val searching = BleLink.status.contains("搜索") || BleLink.status.contains("连接…") || BleLink.status.contains("正在")
             setDot(dot, if (conn && BleLink.verified) GREEN else if (conn || searching) AMBER else RED)
             title.text = when {
-                conn -> BleLink.screenName.ifEmpty { "圆屏" } + " 已连接"
-                searching -> "正在连接圆屏…"
-                else -> "圆屏未连接"
+                conn -> BleLink.screenName.ifEmpty { "导航屏" } + " 已连接"
+                searching -> "正在连接导航屏…"
+                else -> "导航屏未连接"
             }
             sub.setTextColor(if (BleLink.needUnbond) AMBER else SUB)
             sub.text = when {
@@ -572,8 +596,8 @@ class MainActivity : AppCompatActivity() {
             bat.visibility = if (conn && pct >= 0) View.VISIBLE else View.GONE
             if (pct >= 0) {
                 val chg = BleLink.screenBattery.contains("⚡")
-                bat.text = (if (chg) "⚡ " else "") + "$pct%"
-                bat.setTextColor(if (chg) CYAN else if (pct > 50) GREEN else if (pct >= 15) AMBER else RED)
+                bat.text = (if (chg) "充电 · " else "") + "$pct%"
+                bat.setTextColor(if (pct < 15) RED else if (chg) NavStyle.CYAN else SUB)
             }
             reconnect.visibility = if (conn) View.GONE else View.VISIBLE
 
@@ -600,7 +624,7 @@ class MainActivity : AppCompatActivity() {
         val status = label(RideRecorder.status(),13f,CYAN)
         box.addView(status)
         box.addView(label("真实导航、巡航自动记录，模拟导航不记录；保存在本机，可导出 GPX。",12f,SUB))
-        box.addView(pillButton("查看轨迹 / 记录设置",PURPLE) { startActivity(Intent(this,RideHistoryActivity::class.java)) },lpMatch(top=8))
+        box.addView(pillButton("查看轨迹 / 记录设置", STROKE) { startActivity(Intent(this,RideHistoryActivity::class.java)) },lpMatch(top=8))
         refreshers += { status.text=RideRecorder.status() }
         return wrapMargin(box)
     }
@@ -639,7 +663,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 圆屏显示：小地图开关、风格、夜间配色、清爽模式、行程环、弯道上色、走过的路线、预判 */
     private fun mapSection(card: LinearLayout) {
-        card.addView(settingRow("显示小地图", "关掉后圆屏只显示大箭头", toggle({ MapFeeder.enabled }) { MapFeeder.setEnabled(it) }))
+        card.addView(settingRow("显示小地图", "关掉后导航屏只显示大箭头", toggle({ MapFeeder.enabled }) { MapFeeder.setEnabled(it) }))
         card.addView(divider())
         // v6.0 风格：右边小预览图，点「更换」打开全屏风格卡片
         val themeSub = label("", 12f, SUB)
@@ -732,13 +756,13 @@ class MainActivity : AppCompatActivity() {
             duckTip.text = when {
                 NaviVoice.duck == NaviVoice.DUCK_LOWER -> "压不住？有的音乐 App（小米手机上常见）不配合“压低”，改选「暂停」更靠谱"
                 NaviVoice.duck == NaviVoice.DUCK_PAUSE && !NaviVoice.canControlMedia() ->
-                    "👉 点这里打开 MotoNav 的「通知使用权」：不听话的音乐 App 也能被直接暂停、播完自动接着放"
+                    "点这里打开 MotoNav 的「通知使用权」：不听话的音乐 App 也能被直接暂停、播完自动接着放"
                 else -> ""
             }
             duckTip.visibility = if (duckTip.text.isEmpty()) View.GONE else View.VISIBLE
         }
 
-        card.addView(subhead("圆屏音乐遥控", top = 16))
+        card.addView(subhead("导航屏音乐遥控", top = 16))
         val musicHint = label("", 12f, SUB)
         card.addView(musicHint)
         card.addView(pillButton("开启通知使用权", STROKE) {
@@ -746,8 +770,8 @@ class MainActivity : AppCompatActivity() {
             catch (_: Exception) { toast("请到系统设置里开启 MotoNav 通知使用权") }
         }, lpMatch(top = 8, bottom = 4).apply { height = dp(40) })
         refreshers += { musicHint.text = if (AmapProbe.notifEnabled(this))
-            "圆屏左滑查看天气，右滑查看歌曲；音乐页左滑返回，点按上一首、播放/暂停、下一首。上下滑也能查看天气。"
-            else "先开启通知使用权，才能显示歌名和控制手机播放器。需要圆屏固件 v7.8.1。" }
+            "BOX0 使用实体键：首页短按左键进入音乐页、右键进入天气页；音乐页短按中键播放/暂停，天气页短按中键切换详情，子页短按左/右键返回首页。长按左/右键降低/提高亮度，中键长按 3 秒关机。\n触控机型：首页左滑查看天气、右滑查看歌曲；音乐页左滑返回，点按上一首、播放/暂停、下一首；上下滑也可查看天气。"
+            else "先开启通知使用权，才能显示歌名和控制手机播放器。BOX0 使用实体键：首页左键进入音乐、右键进入天气；音乐页中键播放/暂停，天气页中键切换详情，子页左/右键返回首页；长按左/右键降低/提高亮度，中键长按 3 秒关机。触控机型需固件 v7.8.1。" }
 
         // 语音引擎
         val engineSub = label("", 12f, SUB)
@@ -755,7 +779,7 @@ class MainActivity : AppCompatActivity() {
         sys.addView(settingRow("语音引擎", null, textLink("更换") {
             val list = NaviVoice.engines()
             if (list.isEmpty()) { toast("手机上没找到语音引擎，请先到应用商店安装一个"); return@textLink }
-            android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
                 .setTitle("选择语音引擎")
                 .setItems(list.map { it.second }.toTypedArray()) { _, i -> NaviVoice.setEngine(list[i].first) { toast("已切换：${list[i].second}") } }
                 .show()
@@ -766,7 +790,7 @@ class MainActivity : AppCompatActivity() {
             val vs = NaviVoice.zhVoices()
             if (vs.isEmpty()) { toast("这个引擎里没有中文声音（或还在准备中），换个引擎试试"); return@textLink }
             val names = arrayOf("引擎默认") + vs.map { NaviVoice.voiceLabel(it) }.toTypedArray()
-            android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
                 .setTitle("选择声音（${vs.size} 个中文声音）")
                 .setItems(names) { _, i -> NaviVoice.setVoice(if (i == 0) "" else vs[i - 1].name); NaviVoice.test() }
                 .show()
@@ -833,27 +857,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showThemePicker() {
-        val dlg = android.app.Dialog(this, android.R.style.Theme_DeviceDefault_NoActionBar)
+        val dlg = AppCompatDialog(this, R.style.Theme_MotoNav_Dialog)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BG)
-            setPadding(dp(16), dp(20), dp(16), dp(12))
+            setPadding(dp(12), dp(18), dp(12), dp(12))
         }
         // 标题
         root.addView(label("小地图风格", 22f, TEXT, bold = true))
-        root.addView(label("点一下就换，圆屏马上生效。预览图是圆屏上的实际画法（白天配色）", 12f, SUB).apply {
+        root.addView(label("点一下就切换导航屏风格。预览图用于查看白天配色，不同屏幕的布局以实机为准", 12f, SUB).apply {
             setPadding(0, dp(4), 0, dp(12))
         })
         // 卡片网格（两列）
         val gap = dp(12)
-        val itemW = (resources.displayMetrics.widthPixels - dp(16) * 2 - gap) / 2
+        val itemW = (resources.displayMetrics.widthPixels - dp(12) * 2 - gap) / 2
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val cards = HashMap<Int, LinearLayout>()
         fun styleCard(c: LinearLayout, selected: Boolean) {
             c.background = GradientDrawable().apply {
-                setColor(if (selected) Color.parseColor("#2A1830") else CARD)
-                cornerRadius = dpf(18f)
-                setStroke(if (selected) dp(2) else dp(1), if (selected) PINK else STROKE)
+                setColor(if (selected) SELECTED_BG else CARD_SOLID)
+                cornerRadius = dpf(10f)
+                setStroke(maxOf(1, dpf(0.8f).toInt()), if (selected) PINK else STROKE)
             }
         }
         val order = MapFeeder.THEME_ORDER
@@ -933,8 +957,8 @@ class MainActivity : AppCompatActivity() {
     private fun screenSection(card: LinearLayout) {
         val bootSub = label("", 12f, SUB)
         card.addView(settingRow("开机动画 · 摩托车品牌", null, textLink("选择") {
-            android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("选择圆屏开机品牌")
+            AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
+                .setTitle("选择导航屏开机品牌")
                 .setSingleChoiceItems(BootBrand.labels, BootBrand.selected) { dialog, which ->
                     BootBrand.select(which)
                     bootSub.text = BootBrand.summary()
@@ -943,7 +967,7 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("取消", null).show()
         }, bootSub))
         refreshers += { bootSub.text = BootBrand.summary() }
-        card.addView(note("适用 1.75 与 1.85B；保存后断电重启圆屏播放，关闭可直接进入原待机画面"))
+        card.addView(note("适用 1.75 与 1.85B；保存后断电重启导航屏播放，关闭可直接进入原待机画面"))
         card.addView(divider())
         // v5.0 来电显示
         val callSub = label("", 12f, SUB).apply {                // v7.5 权限没给全时黄字提示，点一下去授权
@@ -961,7 +985,7 @@ class MainActivity : AppCompatActivity() {
         refreshers += {
             val missing = CallWatcher.enabled && CallWatcher.PERMS.any { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
             callSub.text = if (missing) "⚠ ${CallWatcher.permsText(this)}（点这里授权）"
-                else "来电时圆屏显示名字和号码，按住圆屏 0.2 秒接听"   // v7.7
+                else "来电时导航屏显示名字和号码；BOX0 短按中键接听，触控机型按住屏幕 0.2 秒接听"   // v7.7
             callSub.setTextColor(if (missing) AMBER else SUB)
         }
         card.addView(divider())
@@ -994,7 +1018,7 @@ class MainActivity : AppCompatActivity() {
         }
         card.addView(divider())
         // v6.3 圆屏方向：按住圆盘转动
-        card.addView(subhead("圆屏方向"))
+        card.addView(subhead("导航屏方向"))
         val dial = RotDial(this, PINK, CYAN, TEXT, SUB, STROKE)
         dial.setAngle(MapFeeder.screenDeg)
         var lastSendAt = 0L
@@ -1016,25 +1040,25 @@ class MainActivity : AppCompatActivity() {
         btnRow.addView(stepBtn("+1°") { nudge(1) }, LinearLayout.LayoutParams(dp(84), dp(44)).apply { rightMargin = dp(10) })
         btnRow.addView(stepBtn("归零") { dial.setAngle(0); MapFeeder.setScreenDeg(0, save = true) }, LinearLayout.LayoutParams(dp(84), dp(44)))
         card.addView(btnRow)
-        card.addView(note("按住圆盘转动，粉色指针 = 画面上方在圆屏上朝的方向，圆屏实时跟着转；转到 0°/90°/180°/270° 附近会吸住"))
+        card.addView(note("按住圆盘转动，蓝色指针 = 画面上方在导航屏上朝的方向，导航屏实时跟着转；转到 0°/90°/180°/270° 附近会吸住"))
         card.addView(divider(top = 14))
         // v6.4 配对验证（固件 v6.5）
         card.addView(settingRow("配对的手机",
-            "圆屏只听配对过的手机。加新手机：重启圆屏，2 分钟内连接并输入配对码",
+            "导航屏只听配对过的手机。加新手机：重启导航屏，2 分钟内连接并输入配对码",
             textLink("忘掉其他手机") {
-                if (!BleLink.verified) { toast("先连上圆屏并通过验证再点"); return@textLink }
-                android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                    .setTitle("让圆屏忘掉其他手机？")
-                    .setMessage("除了现在连着的这台，圆屏记住的其他手机都会被忘掉，它们以后要重新配对。\n\n手机丢了、换了手机时用新手机点一下。")
-                    .setPositiveButton("忘掉") { _, _ -> BleLink.forgetOthers(); toast("已让圆屏忘掉其他手机") }
+                if (!BleLink.verified) { toast("先连上导航屏并通过验证再点"); return@textLink }
+                AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
+                    .setTitle("让导航屏忘掉其他手机？")
+                    .setMessage("除了现在连着的这台，导航屏记住的其他手机都会被忘掉，它们以后要重新配对。\n\n手机丢了、换了手机时用新手机点一下。")
+                    .setPositiveButton("忘掉") { _, _ -> BleLink.forgetOthers(); toast("已让导航屏忘掉其他手机") }
                     .setNegativeButton("取消", null)
                     .show()
             }))
         card.addView(divider())
         // v7.8 身边有几块圆屏：换一块连
-        card.addView(settingRow("连哪块圆屏",
-            "App 优先连上次那块；身边有几块圆屏、想连另一块时点「换一块」。编号在圆屏首页下方",
-            textLink("换一块") { BleLink.switchScreen(this); toast("正在找另一块圆屏…") }))
+        card.addView(settingRow("连哪块导航屏",
+            "App 优先连上次那块；身边有几块导航屏、想连另一块时点「换一块」。编号在导航屏首页下方",
+            textLink("换一块") { BleLink.switchScreen(this); toast("正在找另一块导航屏…") }))
     }
 
     private fun screenSummary(): String =
@@ -1051,7 +1075,7 @@ class MainActivity : AppCompatActivity() {
         val weatherSub = label("和风天气：实况、逐小时、降水、空气、预警", 12f, SUB)
         card.addView(settingRow("和风天气", null, textLink("配置") { showWeatherConfig() }, weatherSub))
         card.addView(textLink("查看天气详情与数据来源") {
-            android.app.AlertDialog.Builder(this).setTitle("和风天气")
+            AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog).setTitle("和风天气")
                 .setMessage(Weather.detailText()).setPositiveButton("关闭", null).show()
         })
         refreshers += { weatherSub.text = if (Weather.host().isBlank() || Weather.key().isBlank()) "未配置：请填写 API Host 与 API Key" else "已配置 · 仅查看天气时请求，10分钟缓存" }
@@ -1076,13 +1100,13 @@ class MainActivity : AppCompatActivity() {
         box.addView(host); box.addView(key)
         box.addView(label("四类权限：天气预报、分钟降水、空气质量、天气预警。只启用实际使用的服务，按账号额度计费。数据来源：和风天气 QWeather。", 12f, SUB))
         box.addView(textLink("和风天气数据来源说明") { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://developer.qweather.com/attribution.html"))) })
-        val dialog = android.app.AlertDialog.Builder(this).setTitle("和风天气配置").setView(box)
+        val dialog = AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog).setTitle("和风天气配置").setView(box)
             .setNegativeButton("取消", null).setPositiveButton("保存", null).create()
         dialog.setOnShowListener {
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 try {
                     Weather.save(host.text.toString(), key.text.toString().trim())
-                    toast("已保存，滑到圆屏天气页查询")
+                    toast("已保存，请打开导航屏天气页查询（BOX0：首页短按右键；触控机型：滑动进入）")
                     dialog.dismiss()
                 } catch(e: IllegalArgumentException) { toast(e.message ?: "请检查配置") }
             }
@@ -1119,7 +1143,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(stat)
         refreshers += {
             if (stat.isShown) {
-                stat.text = "圆屏：${BleLink.status}" + (if (BleLink.screenFps.isNotEmpty()) "\n小地图 ${BleLink.screenFps} 帧/秒" else "") +
+                stat.text = "导航屏：${BleLink.status}" + (if (BleLink.screenFps.isNotEmpty()) "\n小地图 ${BleLink.screenFps} 帧/秒" else "") +
                     "\n小地图：" + (if (!MapFeeder.enabled) "已关闭" else "${MapFeeder.sourceName()} · ${MapFeeder.themeName()}") +
                     "\nApp $APP_VERSION · 后台服务${if (NavService.running) "运行中" else "未运行"}"
             }
@@ -1134,13 +1158,13 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(40)))
         card.addView(subhead("屏幕数据线速度", top = 14))
         card.addView(segmented(listOf(40 to "40 标准", 60 to "60", 80 to "80"), { BleLink.screenMhz }) { BleLink.send("#q,$it") })
-        card.addView(note("越快画面撕裂越轻；花屏就切回 40。切换后圆屏会自动重启"))
-        card.addView(settingRow("快速刷屏", "提高帧率；花屏时关掉（圆屏会自动重启）",
+        card.addView(note("越快画面撕裂越轻；花屏就切回 40。切换后导航屏会自动重启"))
+        card.addView(settingRow("快速刷屏", "提高帧率；花屏时关掉（导航屏会自动重启）",
             toggle({ BleLink.screenFast != 0 }) { BleLink.send(if (it) "#f,1" else "#f,0") }))
         card.addView(divider(top = 8))
         val testRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, dp(10)) }
         testRow.addView(pillButton("测试：左转 160 米", STROKE) { BleLink.send("L,160") }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { rightMargin = dp(8) })
-        testRow.addView(pillButton("圆屏清屏", STROKE) { BleLink.send("C") }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        testRow.addView(pillButton("导航屏清屏", STROKE) { BleLink.send("C") }, LinearLayout.LayoutParams(0, dp(40), 1f))
         card.addView(testRow)
         // v3.5 高德探测 / v3.0 高德原版导航界面
         card.addView(pillButton("高德探测", STROKE) { startActivity(Intent(this@MainActivity, ProbeActivity::class.java)) },
@@ -1162,14 +1186,14 @@ class MainActivity : AppCompatActivity() {
                 val crash = CrashLog.last()
                 info.text = (if (crash.isNotEmpty()) "⚠ 上次闪退（截图发出来；长按这里清除）：\n$crash\n\n" else "") +
                     "Key：${Keys.applyInfo}\n" +
-                    "圆屏：${BleLink.statsText()}\n${BleLink.screenStats}\n" +
+                    "导航屏：${BleLink.statsText()}\n${BleLink.screenStats}\n" +
                     (if (BleLink.screenProf.isNotEmpty()) "${BleLink.screenProf}\n" else "") + "\n" +
                     "小地图：${MapFeeder.infoText()}\n\n" +
                     "导航：${NaviBridge.lastInfo}\n" +
                     (if (NaviBridge.extraInfo.isNotEmpty()) "${NaviBridge.extraInfo}\n" else "") +
                     "巡航/安全提示：${NaviBridge.cruiseRaw}\n" +
                     "来电显示：${CallWatcher.lastInfo}（${CallWatcher.permsText(this)}）\n" +
-                    "圆屏最后一次按下：${CallWatcher.lastTouch}\n" +
+                    "导航屏最后一次按下：${CallWatcher.lastTouch}\n" +
                     "音乐遥控：${MusicBridge.info}\n" +
                     "天气：${Weather.info}\n" +
                     "分享路线：${AmapShare.info}\n" +
@@ -1228,7 +1252,7 @@ class MainActivity : AppCompatActivity() {
         box.addView(tdtIn, lpMatch(top = 6, bottom = 6))
 
 
-        android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+        AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
             .setTitle(if (first) "填写地图 key" else "Key 设置")
             .setView(ScrollView(this).apply { addView(box) })
             .setNegativeButton(if (first) "稍后再填" else "取消", null)
@@ -1238,7 +1262,7 @@ class MainActivity : AppCompatActivity() {
                 val needRestart = Keys.save(this, a, t)
                 MapFeeder.onKeysChanged()
                 if (needRestart && Keys.hasAmap(this)) {
-                    android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                    AlertDialog.Builder(this, R.style.Theme_MotoNav_Dialog)
                         .setTitle("高德 key 已保存")
                         .setMessage("要重新打开一次 App，导航、搜索才会用上新的 key。")
                         .setPositiveButton("现在重启") { _, _ -> Keys.restartApp(this) }
@@ -1257,10 +1281,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(SUB)
             gravity = Gravity.CENTER
             setPadding(0, dp(14), 0, dp(14))
-            background = GradientDrawable().apply {
-                cornerRadius = dpf(14f)
-                setStroke(dp(1), STROKE)
-            }
+            background = NavStyle.pressedRound(this@MainActivity, CARD_SOLID, CARD2, 10f, STROKE)
             setOnClickListener { Toast.makeText(this@MainActivity, "防误触：请长按退出", Toast.LENGTH_SHORT).show() }
             setOnLongClickListener {
                 NavService.stop(this@MainActivity)
@@ -1269,7 +1290,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return FrameLayout(this).apply {
-            setPadding(0, dp(18), 0, 0)
+            setPadding(dp(12), dp(18), dp(12), 0)
             addView(t, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
     }
@@ -1279,15 +1300,12 @@ class MainActivity : AppCompatActivity() {
     private fun card(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(14), dp(16), dp(14))
-        background = GradientDrawable().apply {
-            setColor(CARD)
-            cornerRadius = dpf(18f)
-            setStroke(dp(1), STROKE)
-        }
+        background = NavStyle.round(this@MainActivity, CARD_SOLID, 10f, STROKE)
+        elevation = dp(1).toFloat()
     }
 
     private fun wrapMargin(v: View): View = FrameLayout(this).apply {
-        setPadding(0, 0, 0, dp(12))
+        setPadding(dp(12), 0, dp(12), dp(12))
         addView(v, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
@@ -1299,17 +1317,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sectionTitle(t: String) = TextView(this).apply {
-        text = t.uppercase()
+        text = t
         textSize = 12f
-        setTextColor(PINK)
+        setTextColor(HINT)
         typeface = Typeface.DEFAULT_BOLD
-        letterSpacing = 0.2f
-        setPadding(dp(6), dp(8), 0, dp(8))
+        setPadding(dp(18), dp(12), 0, dp(6))
     }
 
     private fun divider(top: Int = 10): View = View(this).apply {
-        setBackgroundColor(STROKE)
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(top); bottomMargin = dp(2) }
+        setBackgroundColor(NavStyle.DIVIDER)
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+            topMargin = dp(top)
+            bottomMargin = dp(2)
+        }
     }
 
     private fun lpMatch(top: Int = 0, bottom: Int = 0) =
@@ -1320,20 +1340,29 @@ class MainActivity : AppCompatActivity() {
     private fun pillButton(t: String, color: Int, onClick: () -> Unit) = TextView(this).apply {
         text = t
         textSize = 15f
-        setTextColor(Color.WHITE)
         typeface = Typeface.DEFAULT_BOLD
         gravity = Gravity.CENTER
         includeFontPadding = false
-        setPadding(dp(12), 0, dp(12), 0)               // v3.6 上下不留内边距，按钮高度由外面定，字不会被切掉
+        setPadding(dp(12), 0, dp(12), 0)
         minHeight = dp(40)
-        background = GradientDrawable().apply { setColor(color); cornerRadius = dpf(14f) }
+
+        val primary = color == PINK || color == PURPLE || color == CYAN
+        setTextColor(if (primary) Color.WHITE else TEXT)
+        background = if (primary)
+            NavStyle.pressedGradient(this@MainActivity, 10f)
+        else
+            NavStyle.pressedRound(this@MainActivity, CARD_SOLID, CARD2, 10f, STROKE)
+
         setOnClickListener { onClick() }
     }
 
     private fun textLink(t: String, onClick: () -> Unit) = TextView(this).apply {
         text = t
         textSize = 13f
-        setTextColor(CYAN)
+        setTextColor(ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_pressed), intArrayOf()),
+            intArrayOf(NavStyle.ACCENT_PRESSED, NavStyle.CYAN)
+        ))
         setPadding(0, dp(6), dp(6), dp(2))
         setOnClickListener { onClick() }
     }
@@ -1378,18 +1407,25 @@ class MainActivity : AppCompatActivity() {
         return row
     }
 
-    /** 开关（自己画的胶囊开关，配色统一） */
+    /** 锤子开关：白色凹槽，开时拨钮在右、左侧露蓝点；关时拨钮在左、右侧露灰点。 */
     private fun toggle(get: () -> Boolean, onChange: (Boolean) -> Unit): View {
         val track = FrameLayout(this)
-        val knob = View(this).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) } }
-        track.addView(knob, FrameLayout.LayoutParams(dp(22), dp(22)).apply { topMargin = dp(3) })
-        val bg = GradientDrawable().apply { cornerRadius = dpf(14f) }
-        track.background = bg
-        track.layoutParams = LinearLayout.LayoutParams(dp(50), dp(28)).apply { leftMargin = dp(12) }
+        val indicator = View(this).apply { background = NavStyle.oval(this@MainActivity, SUB) }
+        track.addView(indicator, FrameLayout.LayoutParams(dp(6), dp(6)).apply { topMargin = dp(9) })
+        val knob = View(this).apply {
+            background = NavStyle.oval(this@MainActivity, CARD_SOLID, STROKE)
+            elevation = dp(1).toFloat()
+        }
+        track.addView(knob, FrameLayout.LayoutParams(dp(20), dp(20)).apply { topMargin = dp(2) })
+        track.background = NavStyle.pressedRound(this, CARD_SOLID, CARD2, 12f, STROKE)
+        track.layoutParams = LinearLayout.LayoutParams(dp(52), dp(24)).apply { leftMargin = dp(12) }
+        track.isClickable = true
         fun paint() {
             val on = get()
-            bg.setColor(if (on) PINK else STROKE)
-            (knob.layoutParams as FrameLayout.LayoutParams).leftMargin = if (on) dp(25) else dp(3)
+            (indicator.background as? GradientDrawable)?.setColor(if (on) PINK else HINT)
+            (indicator.layoutParams as FrameLayout.LayoutParams).leftMargin = if (on) dp(9) else dp(37)
+            (knob.layoutParams as FrameLayout.LayoutParams).leftMargin = if (on) dp(30) else dp(2)
+            indicator.requestLayout()
             knob.requestLayout()
         }
         track.setOnClickListener { onChange(!get()); paint() }
@@ -1398,12 +1434,12 @@ class MainActivity : AppCompatActivity() {
         return track
     }
 
-    /** 分段选择按钮（选中的填充霓虹色） */
+    /** 分段选择：外层浅灰凹槽，选中项为锤子蓝纵向渐变。 */
     private fun segmented(options: List<Pair<Int, String>>, get: () -> Int, onPick: (Int) -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(3), dp(3), dp(3), dp(3))
-            background = GradientDrawable().apply { setColor(BG); cornerRadius = dpf(14f); setStroke(dp(1), STROKE) }
+            background = NavStyle.round(this@MainActivity, CARD2, 10f, STROKE)
         }
         val items = ArrayList<Pair<Int, TextView>>()
         fun paint() {
@@ -1412,9 +1448,10 @@ class MainActivity : AppCompatActivity() {
                 val sel = v == cur
                 tv.setTextColor(if (sel) Color.WHITE else SUB)
                 tv.typeface = if (sel) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
-                tv.background = if (sel) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(PINK, PURPLE)).apply {
-                    cornerRadius = dpf(11f)
-                } else null
+                tv.background = if (sel)
+                    NavStyle.pressedGradient(this@MainActivity, 8f)
+                else
+                    NavStyle.pressedRound(this@MainActivity, Color.TRANSPARENT, CARD2, 8f)
             }
         }
         for ((v, name) in options) {
@@ -1432,7 +1469,6 @@ class MainActivity : AppCompatActivity() {
         refreshers += { paint() }
         return row
     }
-
     // ================= 刷新 =================
 
     private fun refresh() {

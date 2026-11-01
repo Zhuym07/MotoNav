@@ -19,7 +19,7 @@ object MusicBridge {
     private var current: MediaController? = null
     private var lastText = ""
     private var lastState = ""
-    @Volatile var info = "等待圆屏音乐操作"
+    @Volatile var info = "等待导航屏音乐操作"
     private var operation = 0
     private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) { publish() }

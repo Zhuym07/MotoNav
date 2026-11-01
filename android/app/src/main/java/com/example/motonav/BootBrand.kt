@@ -37,10 +37,10 @@ object BootBrand {
 
     fun summary(): String {
         val state = when {
-            !BleLink.isConnected || !BleLink.verified -> "连接圆屏后自动同步"
-            confirmed == selected -> "已保存到圆屏，下次开机生效"
-            confirmed == -2 -> "圆屏保存失败，请重新选择"
-            else -> "等待圆屏确认（需开机动画版固件）"
+            !BleLink.isConnected || !BleLink.verified -> "连接导航屏后自动同步"
+            confirmed == selected -> "已保存到导航屏，下次开机生效"
+            confirmed == -2 -> "导航屏保存失败，请重新选择"
+            else -> "等待导航屏确认（需开机动画版固件）"
         }
         return "${labels[selected]} · $state"
     }

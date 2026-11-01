@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.view.View
 import kotlin.math.cos
 import kotlin.math.max
@@ -20,44 +21,76 @@ import kotlin.math.sin
  * 版本：跟随 App 版本，见 MainActivity.kt 里的 APP_VERSION（v3.0 新增）
  *
  * 自己的导航界面（选路线页、导航页）共用的配色和小部件：
- * - NavStyle：罪恶都市风配色（和主界面一致）、圆角卡片、渐变按钮
+ * - NavStyle：Smartisan 风格配色、圆角卡片、渐变按钮
  * - TurnArrowView：转向箭头（角度跟随路口实际角度，和圆屏一样）
  * - LaneView：车道指示
  */
 object NavStyle {
-    val BG = Color.parseColor("#0E0A14")
-    val CARD = Color.parseColor("#F21A1424")        // 浮在地图上的卡片（略透明）
-    val CARD_SOLID = Color.parseColor("#1A1424")
-    val CARD2 = Color.parseColor("#251C33")
-    val STROKE = Color.parseColor("#3A2E4C")
-    val TEXT = Color.parseColor("#F3EEF8")
-    val SUB = Color.parseColor("#A79DB6")
-    val PINK = Color.parseColor("#FF4FB4")
-    val PURPLE = Color.parseColor("#8E5CFF")
-    val CYAN = Color.parseColor("#43E1F0")
-    val AMBER = Color.parseColor("#FFB547")
-    val RED = Color.parseColor("#FF4D5E")
-    val GREEN = Color.parseColor("#3DDC84")
+    // Smartisan OS 8 灰阶与唯一强调色。旧字段名继续作为语义别名，避免业务代码混用颜色。
+    val BG = Color.parseColor("#F5F5F5")
+    val CARD = Color.parseColor("#F2FFFFFF")        // 浮在地图上的白色卡片（略透明）
+    val CARD_SOLID = Color.parseColor("#FFFFFF")
+    val CARD2 = Color.parseColor("#FAFAFA")
+    val STROKE = Color.parseColor("#E2E2E2")
+    val DIVIDER = Color.parseColor("#F2F2F2")
+    val TEXT = Color.parseColor("#333333")
+    val TITLE = Color.parseColor("#636363")
+    val SUB = Color.parseColor("#7F7F7F")
+    val HINT = Color.parseColor("#9D9D9D")
+    val PINK = Color.parseColor("#5B87EB")
+    val PURPLE = Color.parseColor("#5B87EB")
+    val CYAN = Color.parseColor("#5079D9")
+    val AMBER = Color.parseColor("#D44D44")
+    val RED = Color.parseColor("#DA463E")
+    val GREEN = Color.parseColor("#79AD31")
+    val ACCENT_PRESSED = Color.parseColor("#4772E6")
+    val SELECTED_BG = Color.parseColor("#E7EDFD")
 
-    val NUM: Typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+    val NUM: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
     val BOLD: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
     val MEDIUM: Typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
 
     fun dp(ctx: Context, v: Float) = v * ctx.resources.displayMetrics.density
     fun dpi(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
 
-    /** 圆角卡片背景 */
-    fun round(ctx: Context, color: Int, radiusDp: Float, strokeColor: Int = 0, strokeDp: Float = 1f) =
+    /** 小圆角卡片背景；描边保持 0.8dp 以内。 */
+    fun round(ctx: Context, color: Int, radiusDp: Float, strokeColor: Int = 0, strokeDp: Float = 0.8f) =
         GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(ctx, radiusDp)
             if (strokeColor != 0) setStroke(max(1, dp(ctx, strokeDp).toInt()), strokeColor)
         }
 
-    /** 粉→紫渐变按钮背景 */
+    /** 锤子蓝纵向渐变主按钮。 */
     fun gradient(ctx: Context, radiusDp: Float) = GradientDrawable(
-        GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(PINK, PURPLE)
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(Color.parseColor("#5B87EB"), Color.parseColor("#5883EB"))
     ).apply { cornerRadius = dp(ctx, radiusDp) }
+
+    /** 瞬时按下态，不做 Ripple。 */
+    fun pressedGradient(ctx: Context, radiusDp: Float): StateListDrawable = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_pressed), round(ctx, ACCENT_PRESSED, radiusDp))
+        addState(intArrayOf(), gradient(ctx, radiusDp))
+    }
+
+    fun pressedRound(ctx: Context, normal: Int, pressed: Int, radiusDp: Float,
+                     strokeColor: Int = 0): StateListDrawable = StateListDrawable().apply {
+        addState(intArrayOf(android.R.attr.state_pressed), round(ctx, pressed, radiusDp, strokeColor))
+        addState(intArrayOf(), round(ctx, normal, radiusDp, strokeColor))
+    }
+
+    fun oval(ctx: Context, color: Int, strokeColor: Int = 0, strokeDp: Float = 0.8f) =
+        GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+            if (strokeColor != 0) setStroke(max(1, dp(ctx, strokeDp).toInt()), strokeColor)
+        }
+
+    fun pressedOval(ctx: Context, normal: Int, pressed: Int, strokeColor: Int = 0): StateListDrawable =
+        StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), oval(ctx, pressed, strokeColor))
+            addState(intArrayOf(), oval(ctx, normal, strokeColor))
+        }
 
     /** 秒 → “1小时5分” / “25分钟” */
     fun durText(s: Int): String {
@@ -82,7 +115,7 @@ object NavStyle {
     }
 }
 
-/** 转向箭头：白色粗线 + 箭头，深色描边；角度跟随路口实际角度 */
+/** 转向箭头：蓝色块内白色箭头；角度跟随路口实际角度 */
 class TurnArrowView(ctx: Context) : View(ctx) {
     var dir = "S"
         set(v) { if (field != v) { field = v; invalidate() } }
@@ -148,27 +181,24 @@ class TurnArrowView(ctx: Context) : View(ctx) {
         fun X(v: Float) = ox + v * k
         fun Y(v: Float) = oy + v * k
 
-        for (pass in 0..1) {
-            val col = if (pass == 0) Color.parseColor("#CC0A0610") else color
-            val extra = if (pass == 0) 0.07f * k else 0f
-            line.color = col; fill.color = col
-            line.strokeWidth = sw * k + extra
-            if (ring) {
-                // 目的地：圆环 + 中心点
-                c.drawCircle(X(0.5f), Y(0.5f), 0.3f * k, line)
-                fill.style = Paint.Style.FILL
-                c.drawCircle(X(0.5f), Y(0.5f), 0.11f * k + extra / 2, fill)
-                continue
-            }
-            val path = Path()
-            path.moveTo(X(pts[0][0]), Y(pts[0][1]))
-            for (i in 1 until pts.size) path.lineTo(X(pts[i][0]), Y(pts[i][1]))
-            c.drawPath(path, line)
-            val h = Path()
-            h.moveTo(X(tip[0]), Y(tip[1])); h.lineTo(X(b1[0]), Y(b1[1])); h.lineTo(X(b2[0]), Y(b2[1])); h.close()
-            if (pass == 0) { fill.style = Paint.Style.FILL_AND_STROKE; fill.strokeWidth = extra } else fill.style = Paint.Style.FILL
-            c.drawPath(h, fill)
+        line.color = color
+        fill.color = color
+        line.strokeWidth = sw * k
+        if (ring) {
+            // 目的地：圆环 + 中心点
+            c.drawCircle(X(0.5f), Y(0.5f), 0.3f * k, line)
+            fill.style = Paint.Style.FILL
+            c.drawCircle(X(0.5f), Y(0.5f), 0.11f * k, fill)
+            return
         }
+        val path = Path()
+        path.moveTo(X(pts[0][0]), Y(pts[0][1]))
+        for (i in 1 until pts.size) path.lineTo(X(pts[i][0]), Y(pts[i][1]))
+        c.drawPath(path, line)
+        val h = Path()
+        h.moveTo(X(tip[0]), Y(tip[1])); h.lineTo(X(b1[0]), Y(b1[1])); h.lineTo(X(b2[0]), Y(b2[1])); h.close()
+        fill.style = Paint.Style.FILL
+        c.drawPath(h, fill)
     }
 }
 
@@ -209,9 +239,9 @@ class LaneView(ctx: Context) : View(ctx) {
             val rec = fr in 0..14
             val x = i * (cw + gap)
             r.set(x, 0f, x + cw, h)
-            box.color = if (rec) Color.parseColor("#33FFFFFF") else Color.parseColor("#14FFFFFF")
+            box.color = if (rec) NavStyle.SELECTED_BG else NavStyle.CARD2
             c.drawRoundRect(r, h * 0.18f, h * 0.18f, box)
-            val col = if (rec) Color.WHITE else Color.parseColor("#66FFFFFF")
+            val col = if (rec) NavStyle.PINK else NavStyle.SUB
             glyph(c, x + cw / 2, h, cw, flags(if (bg in 0..14) bg else 0), col)
         }
     }
@@ -250,15 +280,15 @@ class LaneView(ctx: Context) : View(ctx) {
 /** 小工具：圆角渐变描边（选中的路线卡片用） */
 object GlowBorder {
     fun make(ctx: Context, radiusDp: Float): GradientDrawable = GradientDrawable().apply {
-        setColor(NavStyle.CARD2)
+        setColor(NavStyle.SELECTED_BG)
         cornerRadius = NavStyle.dp(ctx, radiusDp)
-        setStroke(NavStyle.dpi(ctx, 2), NavStyle.PINK)
+        setStroke(max(1, NavStyle.dp(ctx, 0.8f).toInt()), NavStyle.PINK)
     }
 }
 
-/** 文字渐变（标题用） */
+/** 文字渐变（仅保留给少量装饰标题，主界面不再使用霓虹渐变）。 */
 fun gradientShader(width: Float): Shader =
-    LinearGradient(0f, 0f, width, 0f, NavStyle.PINK, NavStyle.CYAN, Shader.TileMode.CLAMP)
+    LinearGradient(0f, 0f, width, 0f, NavStyle.PINK, NavStyle.PINK, Shader.TileMode.CLAMP)
 
 /**
  * 反射调用：高德 SDK 不同版本里有些方法名字/参数不一样，用这个“试着调用”，

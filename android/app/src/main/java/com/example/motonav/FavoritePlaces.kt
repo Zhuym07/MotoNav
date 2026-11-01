@@ -43,11 +43,17 @@ object FavoritePlaces {
 object FavoritePlacesUi {
     fun save(a: Activity, name: String, addr: String, lat: Double, lng: Double, changed: () -> Unit = {}) {
         val old = FavoritePlaces.find(a,lat,lng)
-        val input = EditText(a).apply { setSingleLine(); setText(old?.name ?: name); selectAll(); setPadding(32,24,32,24) }
-        val d = AlertDialog.Builder(a).setTitle(if (old == null) "收藏到常用目的地" else "修改常用目的地")
+        val input = EditText(a).apply {
+            setSingleLine(); setText(old?.name ?: name); selectAll()
+            setTextColor(NavStyle.TEXT); setHintTextColor(NavStyle.HINT)
+            background = NavStyle.round(a, NavStyle.CARD_SOLID, 10f, NavStyle.STROKE)
+            val d = a.resources.displayMetrics.density
+            setPadding((12*d).toInt(), (10*d).toInt(), (12*d).toInt(), (10*d).toInt())
+        }
+        val d = AlertDialog.Builder(a, R.style.Theme_MotoNav_Dialog).setTitle(if (old == null) "收藏到常用目的地" else "修改常用目的地")
             .setView(input).setPositiveButton("保存",null).setNegativeButton("取消",null)
             .apply { if (old != null) setNeutralButton("删除") { _,_ ->
-                AlertDialog.Builder(a).setTitle("删除 ${old.name}？").setPositiveButton("删除") { _,_ ->
+                AlertDialog.Builder(a, R.style.Theme_MotoNav_Dialog).setTitle("删除 ${old.name}？").setPositiveButton("删除") { _,_ ->
                     runCatching { FavoritePlaces.remove(a,old.id) }.onSuccess { changed() }.onFailure { toast(a,it.message) }
                 }.setNegativeButton("取消",null).show()
             } }.create()
@@ -61,10 +67,10 @@ object FavoritePlacesUi {
     fun manage(a: Activity, changed: () -> Unit, navigate: (FavoritePlace) -> Unit) {
         val items = FavoritePlaces.load(a)
         if (items.isEmpty()) { toast(a,"在路线规划页点「收藏到常用目的地」即可添加"); return }
-        AlertDialog.Builder(a).setTitle("常用目的地（${items.size}/50）")
+        AlertDialog.Builder(a, R.style.Theme_MotoNav_Dialog).setTitle("常用目的地（${items.size}/50）")
             .setItems(items.map { it.name }.toTypedArray()) { _,i ->
                 val p = items[i]
-                AlertDialog.Builder(a).setTitle(p.name).setItems(arrayOf("规划路线","改名 / 删除")) { _,action ->
+                AlertDialog.Builder(a, R.style.Theme_MotoNav_Dialog).setTitle(p.name).setItems(arrayOf("规划路线","改名 / 删除")) { _,action ->
                     if (action == 0) navigate(p) else save(a,p.name,p.addr,p.lat,p.lng,changed)
                 }.setNegativeButton("取消",null).show()
             }.setNegativeButton("关闭",null).show()

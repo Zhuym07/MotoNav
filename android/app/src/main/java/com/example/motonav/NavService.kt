@@ -94,7 +94,7 @@ class NavService : Service() {
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val ch = NotificationChannel(CHANNEL_ID, "MotoNav 运行状态", NotificationManager.IMPORTANCE_LOW)
-            ch.description = "MotoNav 在后台保持和圆屏的连接"
+            ch.description = "MotoNav 在后台保持和导航屏的连接"
             (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
         }
     }
@@ -108,7 +108,7 @@ class NavService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_map)
             .setContentTitle("MotoNav $APP_VERSION 正在运行")
-            .setContentText("保持与圆屏的连接，点此打开")
+            .setContentText("保持与导航屏的连接，点此打开")
             .setContentIntent(open)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

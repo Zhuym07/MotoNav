@@ -19,7 +19,7 @@ import kotlin.math.sin
 /**
  * 版本：跟随 App 版本，见 MainActivity.kt 里的 APP_VERSION（v6.3 新增；v7.4 只有按在圆盘上才转）
  *
- * 圆屏方向圆盘：按住圆盘转动（顺时针为正），粉色指针 = 画面上方在圆屏上朝的方向。
+ * 圆屏方向圆盘：按住圆盘转动（顺时针为正），蓝色指针 = 画面上方在圆屏上朝的方向。
  * 转到 0° / 90° / 180° / 270° 附近（±4°）会吸住并轻震一下。
  * onChange(角度, 是否松手)：拖动时一直回调，松手时 final = true。
  */
@@ -34,11 +34,11 @@ class RotDial(ctx: Context, private val pink: Int, private val cyan: Int, privat
     private val density = resources.displayMetrics.density
     private fun dp(v: Float) = v * density
 
-    private val pFace = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#120E1A") }
-    private val pRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = stroke; strokeWidth = dp(2f) }
+    private val pFace = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FAFAFA") }
+    private val pRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = stroke; strokeWidth = dp(0.8f) }
     private val pTick = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val pFill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val pHub = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#221C2C") }
+    private val pHub = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E7EDFD") }
     private val pBig = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = text; textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD
     }
@@ -58,11 +58,11 @@ class RotDial(ctx: Context, private val pink: Int, private val cyan: Int, privat
 
     override fun onDraw(c: Canvas) {
         val cx = width / 2f
-        val top = dp(16f)                                   // 上面留给青色小三角
+        val top = dp(16f)                                   // 上面留给蓝色小三角
         val r = min(width / 2f, (height - top) / 2f) - dp(4f)
         val cy = top + (height - top) / 2f
 
-        // 青色小三角：固定在正上方，表示“圆屏的上方”
+        // 蓝色小三角：固定在正上方，表示“圆屏的上方”
         pFill.color = cyan
         path.reset()
         path.moveTo(cx - dp(10f), cy - r - dp(14f))
@@ -74,33 +74,33 @@ class RotDial(ctx: Context, private val pink: Int, private val cyan: Int, privat
         c.drawCircle(cx, cy, r, pFace)
         c.drawCircle(cx, cy, r, pRim)
 
-        // 刻度：每 5° 一根，30° 长一点，0/90/180/270 粉色加粗
+        // 刻度：每 5° 一根，30° 长一点，0/90/180/270 蓝色加粗
         for (i in 0 until 72) {
             val deg = i * 5
             val a = Math.toRadians(deg.toDouble())
             val major = deg % 90 == 0
             val mid = deg % 30 == 0
             val len = when { major -> dp(16f); mid -> dp(13f); else -> dp(7f) }
-            pTick.color = when { major -> pink; mid -> Color.parseColor("#D8D2E0"); else -> Color.parseColor("#6E6680") }
-            pTick.strokeWidth = when { major -> dp(3.5f); mid -> dp(2f); else -> dp(1.2f) }
+            pTick.color = when { major -> pink; mid -> Color.parseColor("#C8C8C8"); else -> Color.parseColor("#D8D8D8") }
+            pTick.strokeWidth = when { major -> dp(2.5f); mid -> dp(1.6f); else -> dp(1f) }
             val r0 = r - dp(6f) - len
             val r1 = r - dp(6f)
             val sx = sin(a).toFloat(); val sy = -cos(a).toFloat()
             c.drawLine(cx + sx * r0, cy + sy * r0, cx + sx * r1, cy + sy * r1, pTick)
         }
 
-        // 粉色指针：从中心圆边上指向当前角度
+        // 蓝色指针：从中心圆边上指向当前角度
         val hubR = r * 0.36f
         val a = Math.toRadians(angle.toDouble())
         val ux = sin(a).toFloat(); val uy = -cos(a).toFloat()
         val tipR = r - dp(28f)
         val headLen = dp(22f)
-        pTick.color = pink; pTick.strokeWidth = dp(6f); pTick.strokeCap = Paint.Cap.BUTT
+        pTick.color = pink; pTick.strokeWidth = dp(5f); pTick.strokeCap = Paint.Cap.BUTT
         c.drawLine(cx + ux * hubR, cy + uy * hubR, cx + ux * (tipR - headLen + dp(2f)), cy + uy * (tipR - headLen + dp(2f)), pTick)
         pTick.strokeCap = Paint.Cap.ROUND
         val bx = cx + ux * (tipR - headLen); val by = cy + uy * (tipR - headLen)
         val px = -uy; val py = ux                            // 垂直方向
-        val hw = dp(12f)
+        val hw = dp(10f)
         pFill.color = pink
         path.reset()
         path.moveTo(cx + ux * tipR, cy + uy * tipR)

@@ -41,7 +41,7 @@ object Weather {
     fun detailText(): String = qResult?.let {
         "$place\n${it.text} ${it.temperature}°\n${it.wind} · ${it.humidity}\n\n降水：${it.rain}\n空气：${it.air}\n\n${it.warningTitle}\n${it.warningBody}\n${it.warningAdvice}\n\n${it.notes}\n\n${it.attribution}\n预警可能延迟，请以官方最新发布为准。"
     } ?: info
-    @Volatile var info = "（还没查过：在圆屏上左右滑到天气页就会查）"
+    @Volatile var info = "（还没查过：打开导航屏天气页查询；BOX0 首页短按右键，触控机型滑动进入）"
         private set(value) { field = value; android.util.Log.i("MotoNavWeather", value) }
     private var ctx: Context? = null
     private val main = Handler(Looper.getMainLooper())
@@ -314,7 +314,7 @@ object Weather {
             }
             BleLink.send(m)
         } catch (e: Throwable) {
-            info = "发给圆屏出错：$e"
+            info = "发给导航屏出错：$e"
         }
     }
 

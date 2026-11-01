@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MotoNav 主题：深紫黑底（罪恶都市夜景配色），不要系统标题栏 -->
+<!-- MotoNav：Smartisan OS 8 浅色灰阶主题，蓝色为唯一强调色 -->
 <resources>
-    <style name="Theme.MotoNav" parent="Theme.AppCompat.NoActionBar">
-        <item name="colorPrimary">#FF4FB4</item>
-        <item name="colorPrimaryDark">#0E0A14</item>
-        <item name="colorAccent">#43E1F0</item>
-        <item name="android:windowBackground">#0E0A14</item>
-        <item name="android:statusBarColor">#0E0A14</item>
-        <item name="android:navigationBarColor">#0E0A14</item>
+    <style name="Theme.MotoNav" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#5B87EB</item>
+        <item name="colorPrimaryDark">#F5F5F5</item>
+        <item name="colorAccent">#5079D9</item>
+        <item name="android:windowBackground">#F5F5F5</item>
+        <item name="android:statusBarColor">#F5F5F5</item>
+        <item name="android:navigationBarColor">#F5F5F5</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorControlHighlight">#00000000</item>
+    </style>
+
+    <style name="Theme.MotoNav.Dialog" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="colorAccent">#5079D9</item>
+        <item name="android:windowBackground">#F5F5F5</item>
+        <item name="android:colorBackground">#F5F5F5</item>
+        <item name="android:statusBarColor">#F5F5F5</item>
+        <item name="android:navigationBarColor">#F5F5F5</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

@@ -64,6 +64,7 @@ object NaviBridge {
     @Volatile var uiRemainS = 0
     @Volatile var uiLights = 0
     @Volatile var uiSpeed = -1                // 车速 km/h（-1 = 还没有）
+    var locationCallback: ((AMapNaviLocation) -> Unit)? = null
     @Volatile var uiCamLimit = 0              // 前方测速限速（0 = 没有）
     @Volatile var uiCamDist = 0
     @Volatile var uiLanes: IntArray = IntArray(0)   // 每条车道两个数：背景码、推荐码（255 = 不推荐）
@@ -573,6 +574,7 @@ object NaviBridge {
         if (c != null) Brightness.updateLocation(c.latitude, c.longitude)
         handler.post {
             if (!arrivalSession.isOpen(epoch)) return@post
+            locationCallback?.invoke(loc)
             if (cruising) cruiseIdle.onFix(receivedAt, fixStamp, idleSpeed, idleLat, idleLng, idleAccuracy)
             RideRecorder.onFix(idleLat,idleLng,fixStamp,receivedWall,idleAccuracy,idleSpeed)
             if (c != null) {

@@ -189,13 +189,13 @@ class AmapNotifyListener : NotificationListenerService() {
             val bmp = if (Build.VERSION.SDK_INT >= 28) {
                 val pic = android.graphics.Picture()
                 val c = pic.beginRecording(w, h)
-                c.drawColor(Color.parseColor("#3A3644"))
+                c.drawColor(Color.parseColor("#F5F5F5"))
                 v.draw(c)
                 pic.endRecording()
                 Bitmap.createBitmap(pic)
             } else {
                 val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-                val c = Canvas(b); c.drawColor(Color.parseColor("#3A3644")); v.draw(c); b
+                val c = Canvas(b); c.drawColor(Color.parseColor("#F5F5F5")); v.draw(c); b
             }
             AmapProbe.putImage(bmp)
         } catch (_: Throwable) {}
