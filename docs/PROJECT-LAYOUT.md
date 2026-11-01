@@ -43,6 +43,12 @@ GitHub 保存位置为 `Zhuym07/MotoNav` 的 `cleanup/box0-cyd-20261101` 分支�
 
 清理前已把 `artifacts/box0-test/build_box0_replay.py` 移至 `firmware/tests/`，把 BOX0 历史验证记录和崩溃诊断移至 `docs/BOX0-VALIDATION-20261019.md` 与 `docs/BOX0-CRASH-20261019.txt`，避免将有用的源码和说明当作产物丢弃。
 
+## 清理结果
+
+清理后工作区约 **177 MB（169 MiB）**，其中约 60 MB 是保留的 Git 历史；相比最初文件内容大小，净减少约 **9.41 GB（98.2%）**。以上清理目标已删除，Git 工作区核查无源码缺失或未提交改动，个人 fork 上的源码提交已核验一致。后续文档提交会使 `.git` 体积有少量变化。
+
+保留内容的主要占用：`firmware/` 约 82 MB（第三方源码/字体、必要发布输入、各板型源码），`docs/` 约 33 MB（含 README 使用的图片与视频），`android/` 约 1.6 MB，`ios/` 约 0.57 MB。
+
 ## 仅本地保留，不上传
 
 - `android/.local/debug.keystore`：当前开发签名，删除后重新生成将改变签名，可能影响覆盖安装和高德绑定；保留且忽略。
