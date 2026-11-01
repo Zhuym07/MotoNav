@@ -6,6 +6,8 @@ root = Path(__file__).resolve().parents[2]
 web = (root/'MotoNav/WebMotor.swift').read_text()
 models = web[web.index('struct MotorPoint'):web.index('enum MotorRoutes')]
 session = web[web.index('final class WebMotorSession'):web.index('final class MotorBrowser')]
+# Expose only this entrypoint's visibility to test its post-stop guard; body is unchanged.
+session = session.replace('private func replan(_ point:', 'func replan(_ point:')
 core = '\n'.join((root/'MotoNav'/name).read_text() for name in [
     'RouteGeometry.swift', 'MotorRouteTracker.swift', 'MotorReroutePolicy.swift'])
 # Preserve the old production matcher as the output-parity/performance control.

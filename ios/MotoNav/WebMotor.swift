@@ -273,7 +273,7 @@ final class WebMotorSession: ObservableObject {
         if shouldReplan, !rerouting { replan(point) }
     }
     private func replan(_ point: MotorPoint) {
-        guard let route=route,let requestID=reroutePolicy.begin(now:ProcessInfo.processInfo.systemUptime) else {return}
+        guard running,!simulation,let route=route,let requestID=reroutePolicy.begin(now:ProcessInfo.processInfo.systemUptime) else {return}
         replanStartedAt=ProcessInfo.processInfo.systemUptime
         rerouting=true;status="偏航，正在重新规划\(route.request.bicycle ? "自行车" : "摩托车")路线…"
         let generation=token
@@ -281,7 +281,7 @@ final class WebMotorSession: ObservableObject {
         var request=route.request;request.start=point;request.vias=Array(request.vias.dropFirst(nextVia))
         MapPipelineTrace.event("web-reroute-start",["points":route.points.count,"vias":request.vias.count])
         rerouteTask=Task { @MainActor [weak self] in
-            guard let self=self else {return}
+            guard let self=self,self.running,self.token==generation,self.reroutePolicy.pending==requestID,!Task.isCancelled else {return}
             var succeeded=false,failureMessage="未获得有效路线，保留原路线"
             // Every exit releases only its own lease; a late old result cannot release a newer request.
             defer {

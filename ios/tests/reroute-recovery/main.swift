@@ -77,6 +77,15 @@ old.resume(returning:[original]);spin(0.2)
 check(session.running && session.route?.id==newRoute.id && !busy(session),"old response cannot revive cancelled journey")
 session.stop()
 
+let endedCalls=MotorRoutes.calls
+session.replan(MotorPoint(lat:30.02,lng:104));spin(0.1)
+check(MotorRoutes.calls==endedCalls && !busy(session),"an arrival/stop cannot launch a leftover recalculation")
+
+session.start(original,simulate:false)
+let queuedCalls=MotorRoutes.calls
+session.replan(MotorPoint(lat:30.005,lng:104.001));session.stop();spin(0.2)
+check(MotorRoutes.calls==queuedCalls && !busy(session),"stopping a queued request prevents its network operation from starting")
+
 // Matcher correctness against baseline for loops, boundaries and movement.
 let line=(0...1200).map{MotorPoint(lat:30+Double($0)/111320,lng:104)}
 var current=MotorRouteTracker(line),legacy=LegacyMotorRouteTracker(line)
