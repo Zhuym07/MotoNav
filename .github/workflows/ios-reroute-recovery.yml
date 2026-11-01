@@ -59,7 +59,7 @@ jobs:
           xcrun strip -S "$RUNNER_TEMP/Stage/Payload/MotoNav.app/MotoNav"
           xcrun strip -S "$RUNNER_TEMP/Stage/Payload/MotoNav.app/PlugIns/MotoNavShare.appex/MotoNavShare"
           (cd "$RUNNER_TEMP/Stage" && zip -qry "$GITHUB_WORKSPACE/output/ios/MotoNav-0.16.1-reroute-recovery-build13-unsigned.ipa" Payload)
-          git archive --format=zip -o output/ios/MotoNav-iOS-0.16.1-build13-Source.zip HEAD ios .github/workflows/ios-reroute-recovery.yml
+          git archive --format=zip -o output/ios/MotoNav-iOS-0.16.1-build13-Source.zip HEAD ios build-ios.sh scripts/build-ios-ipa.sh .github/workflows/ios-reroute-recovery.yml
           (cd output/ios && shasum -a 256 *.ipa *.zip > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         if: always()

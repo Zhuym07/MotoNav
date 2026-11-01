@@ -176,7 +176,7 @@ final class WebMotorSession: ObservableObject {
     private var cum: [Double] = [], progress = 0.0, timer: Timer?, token = UUID(), announced = ""
     private var stepIndex = 0, rerouting = false
     private var reroutePolicy=MotorReroutePolicy(), rerouteTask: Task<Void,Never>?
-    private var routeTolerance=25.0, statusUntil=0.0
+    private var routeTolerance=25.0, statusUntil=0.0, replanStartedAt=0.0
     private var roadSent = "", footerSent = ""
     private var startedAt = Date(), tripMeters = 0.0, tripMax = 0, previousFix: CLLocation?
     private var viaProgress: [Double] = [], nextVia = 0, lastFix: Date?
@@ -213,7 +213,7 @@ final class WebMotorSession: ObservableObject {
             if self.lastFix == nil || Date().timeIntervalSince(self.lastFix!)>3 {
                 if let current=self.route {WebRouteMetadata.shared.push(route:current,progress:self.progress,fresh:false,speed:0)}
                 if Date().timeIntervalSince(self.lastFix ?? self.startedAt)>10 {
-                    self.status="GPS 信号弱，等待新定位";BleLink.shared.send("#x,1")
+                    if ProcessInfo.processInfo.systemUptime>=self.statusUntil {self.status="GPS 信号弱，等待新定位"};BleLink.shared.send("#x,1")
                 }
             }
         }
@@ -274,10 +274,12 @@ final class WebMotorSession: ObservableObject {
     }
     private func replan(_ point: MotorPoint) {
         guard let route=route,let requestID=reroutePolicy.begin(now:ProcessInfo.processInfo.systemUptime) else {return}
+        replanStartedAt=ProcessInfo.processInfo.systemUptime
         rerouting=true;status="偏航，正在重新规划\(route.request.bicycle ? "自行车" : "摩托车")路线…"
         let generation=token
         WebRouteMetadata.shared.stop();metadataSuspended=true;BleLink.shared.send("#y,1")
         var request=route.request;request.start=point;request.vias=Array(request.vias.dropFirst(nextVia))
+        MapPipelineTrace.event("web-reroute-start",["points":route.points.count,"vias":request.vias.count])
         rerouteTask=Task { @MainActor [weak self] in
             guard let self=self else {return}
             var succeeded=false,failureMessage="未获得有效路线，保留原路线"
@@ -289,6 +291,7 @@ final class WebMotorSession: ObservableObject {
                 let routes=try await MotorRoutes.load(request)
                 try Task.checkCancellation()
                 guard self.running,self.token==generation,self.reroutePolicy.pending==requestID else {return}
+                if self.reroutePolicy.expired(now:ProcessInfo.processInfo.systemUptime) != nil {throw AmapShare.Fail("重算请求超时")}
                 guard let new=routes.first else {throw AmapShare.Fail("未返回可用路线")}
                 self.route=new;self.cum=new.cum;self.progress=0;self.stepIndex=0;self.nextVia=0
                 self.tracker=MotorRouteTracker(new.points);self.confirmedArrival=false;self.lastFix=nil;self.previousFix=nil;self.metadataSuspended=false
@@ -302,6 +305,7 @@ final class WebMotorSession: ObservableObject {
     private func finishReplan(_ id: UUID, success: Bool, error: String) {
         let now=ProcessInfo.processInfo.systemUptime
         guard reroutePolicy.finish(id,now:now,success:success) else {return}
+        MapPipelineTrace.event("web-reroute-end",["ok":success,"elapsedMs":Int(max(0,now-replanStartedAt)*1000)])
         rerouting=false;rerouteTask=nil;BleLink.shared.send("#y,0")
         status=success ? "路线已重新规划" : "重算失败，保留原路线：\(error)"
         statusUntil=now+5

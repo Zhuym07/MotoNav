@@ -47,3 +47,5 @@ enum MotorRoutes {
         }
     }
 }
+
+enum MapPipelineTrace {static func event(_ name:String,_ fields:[String:Any]=[:]){}}
